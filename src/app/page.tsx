@@ -16,7 +16,7 @@ import {
   Check,
   X,
   Send,
-  Telegram,
+  MessageCircle,
   Bell,
   AlertTriangle,
   BarChart3,
