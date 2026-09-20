@@ -20,7 +20,6 @@ import {
   Bell,
   AlertTriangle,
   BarChart3,
-  MessageCircle,
   Power,
 } from "lucide-react";
 
