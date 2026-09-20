@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 360px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: white;
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    
+    .title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    
+    .subtitle {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    
+    .url-config {
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    
+    .url-label {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .url-input {
+      width: 100%;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      color: white;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    
+    .url-input:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    
+    .url-input.local {
+      border-color: #22c55e;
+    }
+    
+    .url-input.vercel {
+      border-color: #f59e0b;
+    }
+    
+    .status-bar {
+      background: rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .status-row:last-child {
+      margin-bottom: 0;
+    }
+    
+    .status-label {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    
+    .status-value {
+      font-size: 13px;
+      font-weight: 500;
+    }
+    
+    .status-value.connected {
+      color: #22c55e;
+    }
+    
+    .status-value.disconnected {
+      color: #ef4444;
+    }
+    
+    .prices {
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .prices-title {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .price-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .price-item:last-child {
+      border-bottom: none;
+    }
+    
+    .price-symbol {
+      font-weight: 600;
+      color: #f59e0b;
+    }
+    
+    .price-values {
+      text-align: right;
+      font-size: 12px;
+    }
+    
+    .price-bid {
+      color: #22c55e;
+    }
+    
+    .price-ask {
+      color: #ef4444;
+    }
+    
+    .connect-btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .connect-btn.active {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+    }
+    
+    .connect-btn.inactive {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+    }
+    
+    .connect-btn:hover {
+      transform: scale(1.02);
+    }
+    
+    .info {
+      margin-top: 12px;
+      padding: 10px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 6px;
+      font-size: 11px;
+      color: #64748b;
+      text-align: center;
+    }
+    
+    .local-hint {
+      font-size: 10px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">W</div>
+    <div>
+      <div class="title">Weltrade Extractor</div>
+      <div class="subtitle">Real-time FX Vol Prices</div>
+    </div>
+  </div>
+  
+  <div class="url-config">
+    <div class="url-label">Dashboard URL</div>
+    <input 
+      type="text" 
+      id="dashboard-url" 
+      class="url-input" 
+      placeholder="http://localhost:3000"
+    >
+    <div class="local-hint">Use localhost for local dev, or your Vercel URL after deploy</div>
+  </div>
+  
+  <div class="status-bar">
+    <div class="status-row">
+      <span class="status-label">Dashboard</span>
+      <span class="status-value" id="dashboard-status">Checking...</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Last Update</span>
+      <span class="status-value" id="last-update">--</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Symbols Found</span>
+      <span class="status-value" id="symbols-count">0</span>
+    </div>
+  </div>
+  
+  <div class="prices" id="prices-section">
+    <div class="prices-title">Live Prices</div>
+    <div id="prices-list">
+      <div style="color: #64748b; font-size: 12px;">Open Weltrade Web Terminal to see prices</div>
+    </div>
+  </div>
+  
+  <button class="connect-btn inactive" id="connect-btn">Start Extraction</button>
+  
+  <div class="info">
+    Make sure Weltrade Web Terminal is open and logged in
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
