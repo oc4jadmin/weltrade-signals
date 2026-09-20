@@ -327,7 +327,7 @@ const ChartPanel = ({ symbol }: { symbol: string }) => {
       const { createChart } = await import("lightweight-charts");
       const chart = createChart(chartContainerRef.current!, {
         layout: {
-          background: { type: "solid", color: "#1e293b" },
+          background: "#1e293b",
           textColor: "#94a3b8",
         },
         grid: {
