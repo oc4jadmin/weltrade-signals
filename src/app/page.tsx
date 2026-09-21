@@ -65,14 +65,14 @@ const SYMBOLS = [
 
 // Generate mock price data
 const generatePriceData = (basePrice: number, count: number) => {
-  const data = [];
+  const data: Array<{ time: number; open: number; high: number; low: number; close: number }> = [];
   let price = basePrice;
   const now = Date.now();
   for (let i = count; i >= 0; i--) {
     const change = (Math.random() - 0.5) * 0.5;
     price = Math.max(price + change, basePrice * 0.95);
     data.push({
-      time: (now - i * 60000) / 1000,
+      time: Math.floor((now - i * 60000) / 1000),
       open: price,
       high: price + Math.random() * 0.3,
       low: price - Math.random() * 0.3,
@@ -324,7 +324,7 @@ const ChartPanel = ({ symbol }: { symbol: string }) => {
     if (!chartContainerRef.current) return;
 
     const loadChart = async () => {
-      const { createChart, ColorType } = await import("lightweight-charts");
+      const { createChart, ColorType, Time } = await import("lightweight-charts");
       const chart = createChart(chartContainerRef.current!, {
         layout: {
           background: { type: ColorType.Solid, color: "#1e293b" },
@@ -357,10 +357,19 @@ const ChartPanel = ({ symbol }: { symbol: string }) => {
         wickDownColor: "#ef4444",
       });
 
+      const candleSeries = chart.addCandlestickSeries({
+        upColor: "#22c55e",
+        downColor: "#ef4444",
+        borderUpColor: "#22c55e",
+        borderDownColor: "#ef4444",
+        wickUpColor: "#22c55e",
+        wickDownColor: "#ef4444",
+      });
+
       // Generate sample data
       const basePrice = 100 + Math.random() * 50;
       const data = generatePriceData(basePrice, 100);
-      candleSeries.setData(data);
+      candleSeries.setData(data as any);
 
       // Add volume
       const volumeSeries = chart.addHistogramSeries({
@@ -373,7 +382,7 @@ const ChartPanel = ({ symbol }: { symbol: string }) => {
       });
       volumeSeries.setData(
         data.map((d) => ({
-          time: d.time,
+          time: d.time as any,
           value: Math.random() * 1000 + 100,
           color: d.close >= d.open ? "rgba(34, 197, 94, 0.3)" : "rgba(239, 68, 68, 0.3)",
         }))
