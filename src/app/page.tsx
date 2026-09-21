@@ -68,15 +68,17 @@ const generatePriceData = (basePrice: number, count: number) => {
   const data: Array<{ time: number; open: number; high: number; low: number; close: number }> = [];
   let price = basePrice;
   const now = Date.now();
+  // Scale volatility based on price magnitude (~0.05% per minute)
+  const vol = Math.max(basePrice * 0.0005, 0.1);
   for (let i = count; i >= 0; i--) {
-    const change = (Math.random() - 0.5) * 0.5;
+    const change = (Math.random() - 0.5) * vol * 2;
     price = Math.max(price + change, basePrice * 0.95);
     data.push({
       time: Math.floor((now - i * 60000) / 1000),
       open: price,
-      high: price + Math.random() * 0.3,
-      low: price - Math.random() * 0.3,
-      close: price + (Math.random() - 0.5) * 0.2,
+      high: price + Math.random() * vol,
+      low: price - Math.random() * vol,
+      close: price + (Math.random() - 0.5) * vol,
     });
   }
   return data;
@@ -316,8 +318,11 @@ const PriceTicker = ({ realPrices }: { realPrices: Record<string, { bid: number;
 };
 
 // Chart Component
-const ChartPanel = ({ symbol }: { symbol: string }) => {
+const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Record<string, { bid: number; ask: number }> }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<any>(null);
+  const candleSeriesRef = useRef<any>(null);
+  const volumeSeriesRef = useRef<any>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState("M5");
 
   useEffect(() => {
@@ -357,8 +362,13 @@ const ChartPanel = ({ symbol }: { symbol: string }) => {
         wickDownColor: "#ef4444",
       });
 
-      // Generate sample data
-      const basePrice = 100 + Math.random() * 50;
+      // Use real price if available, else mock base
+      const realPrice = realPrices?.[symbol];
+      const basePrice = realPrice
+        ? (realPrice.bid + realPrice.ask) / 2
+        : 100 + Math.random() * 50;
+
+      // Generate historical data centered on real price
       const data = generatePriceData(basePrice, 100);
       candleSeries.setData(data as any);
 
@@ -381,6 +391,11 @@ const ChartPanel = ({ symbol }: { symbol: string }) => {
 
       chart.timeScale().fitContent();
 
+      // Save refs for live updates
+      chartRef.current = chart;
+      candleSeriesRef.current = candleSeries;
+      volumeSeriesRef.current = volumeSeries;
+
       // Handle resize
       const handleResize = () => {
         if (chartContainerRef.current) {
@@ -393,6 +408,8 @@ const ChartPanel = ({ symbol }: { symbol: string }) => {
       return () => {
         window.removeEventListener("resize", handleResize);
         chart.remove();
+        chartRef.current = null;
+        candleSeriesRef.current = null;
       };
     };
 
@@ -401,6 +418,29 @@ const ChartPanel = ({ symbol }: { symbol: string }) => {
       cleanup.then((fn) => fn && fn());
     };
   }, [symbol, selectedTimeframe]);
+
+  // Update chart with live tick data when realPrices change
+  useEffect(() => {
+    if (!candleSeriesRef.current || !realPrices) return;
+    
+    const priceInfo = realPrices[symbol];
+    if (!priceInfo) return;
+    
+    const midPrice = (priceInfo.bid + priceInfo.ask) / 2;
+    const now = Math.floor(Date.now() / 1000);
+    
+    try {
+      candleSeriesRef.current.update({
+        time: now as any,
+        open: midPrice,
+        high: midPrice,
+        low: midPrice,
+        close: midPrice,
+      });
+    } catch (e) {
+      // Ignore update errors
+    }
+  }, [realPrices, symbol]);
 
   return (
     <div className="bg-dark-200 rounded-lg overflow-hidden">
@@ -1207,7 +1247,7 @@ export default function Dashboard() {
               </div>
 
               {/* Chart */}
-              <ChartPanel symbol={selectedSymbol} />
+              <ChartPanel symbol={selectedSymbol} realPrices={realPrices} />
 
               {/* Signal Panels */}
               <ScalpingPanel signals={signals} />
