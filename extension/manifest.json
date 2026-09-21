@@ -12,7 +12,9 @@
     "https://*.weltrade.com/*",
     "https://weltrade.com/*",
     "http://localhost:3000/*",
-    "http://localhost/*"
+    "http://localhost/*",
+    "https://weltrade-signals.vercel.app/*",
+    "https://*.vercel.app/*"
   ],
   "background": {
     "service_worker": "background.js"

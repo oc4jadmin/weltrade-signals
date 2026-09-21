@@ -1089,6 +1089,8 @@ export default function Dashboard() {
         if (response.ok) {
           const data = await response.json();
           
+          console.log('[Dashboard] Prices API:', { isLive: data.isLive, count: data.prices?.length, age: data.age });
+          
           // Use isLive flag from server (heartbeat within 10s)
           if (data.isLive) {
             setExtensionConnected(true);
