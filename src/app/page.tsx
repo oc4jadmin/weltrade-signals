@@ -357,15 +357,6 @@ const ChartPanel = ({ symbol }: { symbol: string }) => {
         wickDownColor: "#ef4444",
       });
 
-      const candleSeries = chart.addCandlestickSeries({
-        upColor: "#22c55e",
-        downColor: "#ef4444",
-        borderUpColor: "#22c55e",
-        borderDownColor: "#ef4444",
-        wickUpColor: "#22c55e",
-        wickDownColor: "#ef4444",
-      });
-
       // Generate sample data
       const basePrice = 100 + Math.random() * 50;
       const data = generatePriceData(basePrice, 100);
