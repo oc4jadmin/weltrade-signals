@@ -324,7 +324,7 @@ const ChartPanel = ({ symbol }: { symbol: string }) => {
     if (!chartContainerRef.current) return;
 
     const loadChart = async () => {
-      const { createChart, ColorType, Time } = await import("lightweight-charts");
+      const { createChart, ColorType } = await import("lightweight-charts");
       const chart = createChart(chartContainerRef.current!, {
         layout: {
           background: { type: ColorType.Solid, color: "#1e293b" },
