@@ -79,6 +79,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       lastHeartbeat: now
     });
     
+    console.log('[Background] Received', (message.prices || []).length, 'prices, sent to dashboard');
+    
     sendResponse({ received: true });
   }
   

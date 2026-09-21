@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Weltrade Price Extractor",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Extract real-time FX Vol prices from Weltrade Web Terminal",
   "permissions": [
     "activeTab",
@@ -23,8 +23,7 @@
     {
       "matches": ["https://*.weltrade.com/*", "https://weltrade.com/*"],
       "js": ["content.js"],
-      "run_at": "document_start",
-      "all_frames": true
+      "run_at": "document_start"
     }
   ],
   "action": {

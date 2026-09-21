@@ -94,8 +94,16 @@ function sendPrices() {
   
   // Always send heartbeat so dashboard knows extension is alive
   try {
-    chrome.runtime.sendMessage(message).catch(() => {});
-  } catch (e) {}
+    if (chrome.runtime?.id) {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[Weltrade Extractor] Send failed:', chrome.runtime.lastError.message);
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('[Weltrade Extractor] Runtime error:', e.message);
+  }
   
   if (prices.length > 0) {
     try {
@@ -104,6 +112,12 @@ function sendPrices() {
         updated: Date.now()
       }));
     } catch (e) {}
+    
+    // Debug: log first time we get prices
+    if (!window.__weltradeLogged) {
+      console.log('[Weltrade Extractor] First prices detected:', prices.length, 'symbols');
+      window.__weltradeLogged = true;
+    }
   }
 }
 
