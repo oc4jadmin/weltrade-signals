@@ -1,8 +1,13 @@
 // Weltrade Price Extractor - Content Script
 // Extracts real-time FX Vol prices from Weltrade Web Terminal
 
+// Weltrade symbol format: "SFX Vol 99", "SFX Vol 80", "SFX Vol 60", "SFX Vol 40", "SFX Vol 20"
 const SYMBOLS = [
-  'FXVOL99', 'FXVOL80', 'FXVOL60', 'FXVOL40', 'FXVOL20'
+  { display: 'SFX Vol 99', code: 'FXVOL99' },
+  { display: 'SFX Vol 80', code: 'FXVOL80' },
+  { display: 'SFX Vol 60', code: 'FXVOL60' },
+  { display: 'SFX Vol 40', code: 'FXVOL40' },
+  { display: 'SFX Vol 20', code: 'FXVOL20' },
 ];
 
 let lastPrices = {};
@@ -11,83 +16,52 @@ let extractionInterval = null;
 // Extract price from market watch
 function extractPrices() {
   const prices = [];
-  
-  // Method 1: Try to find in market watch table
-  const rows = document.querySelectorAll('.market-watch-row, .symbol-item, [class*="market"] [class*="symbol"]');
-  
-  rows.forEach(row => {
-    const text = row.textContent || '';
-    
-    SYMBOLS.forEach(symbol => {
-      if (text.includes(symbol)) {
-        // Try to extract bid/ask prices
-        const bidMatch = text.match(/Bid[:\s]*([\d.]+)/i);
-        const askMatch = text.match(/Ask[:\s]*([\d.]+)/i);
-        
-        if (bidMatch && askMatch) {
-          prices.push({
-            symbol: symbol,
-            bid: parseFloat(bidMatch[1]),
-            ask: parseFloat(askMatch[1]),
-            timestamp: Date.now()
-          });
-        }
-      }
-    });
-  });
-  
-  // Method 2: Try to find in chart header or symbol display
-  const chartSymbol = document.querySelector('.chart-symbol, .symbol-name, [class*="chart"] [class*="symbol"]');
-  if (chartSymbol) {
-    const symbolText = chartSymbol.textContent || '';
-    const bidEl = document.querySelector('.bid-price, .price-bid, [class*="bid"]');
-    const askEl = document.querySelector('.ask-price, .price-ask, [class*="ask"]');
-    
-    if (bidEl && askEl) {
-      const bid = parseFloat(bidEl.textContent);
-      const ask = parseFloat(askEl.textContent);
-      
-      SYMBOLS.forEach(symbol => {
-        if (symbolText.includes(symbol)) {
-          prices.push({
-            symbol: symbol,
-            bid: bid,
-            ask: ask,
-            timestamp: Date.now()
-          });
-        }
-      });
-    }
-  }
-  
-  // Method 3: Try to find in any element with price data
-  const allElements = document.querySelectorAll('*');
   const priceData = {};
-  
+
+  // Helper: find symbol by display name in any element
+  const findSymbolInText = (text) => {
+    for (const sym of SYMBOLS) {
+      if (text.includes(sym.display)) return sym;
+    }
+    return null;
+  };
+
+  // Method 1: Scan all elements, find ones containing "SFX Vol XX"
+  const allElements = document.querySelectorAll('*');
   allElements.forEach(el => {
+    // Skip elements with too many children (containers, not leaves)
+    if (el.children.length > 5) return;
+    if (!el.textContent) return;
+
     const text = el.textContent || '';
-    
-    SYMBOLS.forEach(symbol => {
-      if (text.includes(symbol) && !priceData[symbol]) {
-        // Look for numbers near the symbol
-        const parentText = el.parentElement?.textContent || '';
-        const numbers = parentText.match(/[\d]+\.[\d]+/g);
-        
-        if (numbers && numbers.length >= 2) {
-          // Assume first two numbers are bid and ask
-          priceData[symbol] = {
-            symbol: symbol,
+    const sym = findSymbolInText(text);
+    if (!sym) return;
+
+    // Find numeric prices in same row or parent
+    let scope = el;
+    let depth = 0;
+    while (scope && depth < 6) {
+      const scopeText = scope.textContent || '';
+      // Match decimals like 3646.26, 270101.52
+      const numbers = scopeText.match(/\b\d{1,10}\.\d{2,5}\b/g);
+      if (numbers && numbers.length >= 2) {
+        // Take the first two reasonable numbers as bid/ask
+        if (!priceData[sym.code]) {
+          priceData[sym.code] = {
+            symbol: sym.code,
             bid: parseFloat(numbers[0]),
             ask: parseFloat(numbers[1]),
             timestamp: Date.now()
           };
         }
+        break;
       }
-    });
+      scope = scope.parentElement;
+      depth++;
+    }
   });
-  
+
   Object.values(priceData).forEach(p => prices.push(p));
-  
   return prices;
 }
 
