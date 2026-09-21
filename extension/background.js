@@ -99,14 +99,54 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+// Inject content script on demand (for already-open tabs)
+async function injectContentScript(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      files: ['content.js']
+    });
+    console.log('Weltrade Extractor: Content script injected into tab', tabId);
+    return true;
+  } catch (e) {
+    console.error('Weltrade Extractor: Failed to inject script', e.message);
+    return false;
+  }
+}
+
 // Handle extension icon click
 chrome.action.onClicked.addListener(async (tab) => {
-  // Toggle extraction on current tab
-  chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_EXTRACTION' });
+  // Try to send message; if fails, inject then retry
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: 'START_EXTRACTION' });
+  } catch (e) {
+    const ok = await injectContentScript(tab.id);
+    if (ok) {
+      // Wait a moment then send message
+      setTimeout(() => {
+        chrome.tabs.sendMessage(tab.id, { type: 'START_EXTRACTION' }).catch(() => {});
+      }, 500);
+    }
+  }
 });
 
 // Initialize
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Weltrade Price Extractor installed!');
   updateBadge(null);
+});
+
+// Also handle messages requesting script injection
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'INJECT_SCRIPT') {
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+      if (tabs[0]) {
+        const ok = await injectContentScript(tabs[0].id);
+        sendResponse({ injected: ok });
+      } else {
+        sendResponse({ injected: false, error: 'No active tab' });
+      }
+    });
+    return true;
+  }
 });

@@ -171,11 +171,27 @@ scanBtn?.addEventListener('click', async () => {
       return;
     }
     
-    chrome.tabs.sendMessage(tab.id, { type: 'SCAN_NOW' }, (response) => {
+    if (!tab.url || !tab.url.includes('weltrade')) {
+      scanResult.textContent = 'Not on a Weltrade page.\nCurrent URL: ' + tab.url;
+      return;
+    }
+    
+    // Try direct message first
+    chrome.tabs.sendMessage(tab.id, { type: 'SCAN_NOW' }, async (response) => {
       if (chrome.runtime.lastError) {
-        scanResult.textContent = 'Cannot scan: ' + chrome.runtime.lastError.message + '\n\nMake sure you are on a Weltrade page.';
+        // Try injecting script
+        scanResult.textContent = 'Injecting content script...';
+        chrome.runtime.sendMessage({ type: 'INJECT_SCRIPT' }, (injectResp) => {
+          if (injectResp?.injected) {
+            scanResult.textContent = 'Injected! Re-scanning in 2s...';
+            setTimeout(() => scanBtn.click(), 2000);
+          } else {
+            scanResult.textContent = 'Failed to inject script. Try:\n1. Refresh the Weltrade page (Ctrl+Shift+R)\n2. Make sure extension is enabled';
+          }
+        });
         return;
       }
+      
       if (!response) {
         scanResult.textContent = 'No response from page';
         return;
