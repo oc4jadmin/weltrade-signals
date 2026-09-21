@@ -1191,12 +1191,12 @@ export default function Dashboard() {
                     <span className="text-sm text-slate-400">Win Rate</span>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {signals.filter((s) => s.status === "HIT_TP").length +
+                    {signals.filter((s) => ["HIT_TP1", "HIT_TP2", "HIT_TP3"].includes(s.status)).length +
                       signals.filter((s) => s.status === "HIT_SL").length >
                     0
                       ? Math.round(
-                          (signals.filter((s) => s.status === "HIT_TP").length /
-                            (signals.filter((s) => s.status === "HIT_TP").length +
+                          (signals.filter((s) => ["HIT_TP1", "HIT_TP2", "HIT_TP3"].includes(s.status)).length /
+                            (signals.filter((s) => ["HIT_TP1", "HIT_TP2", "HIT_TP3"].includes(s.status)).length +
                               signals.filter((s) => s.status === "HIT_SL").length)) *
                             100
                         )
