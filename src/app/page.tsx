@@ -1258,7 +1258,7 @@ export default function Dashboard() {
 
           {activeTab === "settings" && (
             <div className="max-w-2xl space-y-6">
-              <SettingsPanel config={mt5Config} onUpdate={setMt5Config} />
+              <SettingsPanel mt5Config={mt5Config} onUpdate={setMt5Config} />
 
               <div className="bg-dark-200 rounded-lg p-6">
                 <h4 className="font-semibold text-white mb-4">MT5 Connection Setup</h4>
