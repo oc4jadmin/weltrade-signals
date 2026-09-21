@@ -368,8 +368,19 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
         ? (realPrice.bid + realPrice.ask) / 2
         : 100 + Math.random() * 50;
 
-      // Generate historical data centered on real price
+      // Generate historical data ending at current real price
       const data = generatePriceData(basePrice, 100);
+      // Adjust last candle to match real price for smooth transition
+      if (data.length > 0 && realPrice) {
+        const last = data[data.length - 1];
+        const midReal = (realPrice.bid + realPrice.ask) / 2;
+        last.close = midReal;
+        last.open = midReal;
+        last.high = midReal;
+        last.low = midReal;
+        // Use actual current time for last candle so live updates can extend
+        last.time = Math.floor(Date.now() / 1000);
+      }
       candleSeries.setData(data as any);
 
       // Add volume
@@ -430,6 +441,8 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
     const now = Math.floor(Date.now() / 1000);
     
     try {
+      // Lightweight Charts requires unique, increasing time
+      // For "realtime" mode, set the last bar's time and update close only
       candleSeriesRef.current.update({
         time: now as any,
         open: midPrice,
@@ -438,7 +451,7 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
         close: midPrice,
       });
     } catch (e) {
-      // Ignore update errors
+      // If time conflict, silently ignore - the next tick will replace it
     }
   }, [realPrices, symbol]);
 
@@ -1075,13 +1088,17 @@ export default function Dashboard() {
         const response = await fetch('/api/prices');
         if (response.ok) {
           const data = await response.json();
-          if (data.prices && data.prices.length > 0) {
-            const pricesMap: Record<string, { bid: number; ask: number }> = {};
-            data.prices.forEach((p: any) => {
-              pricesMap[p.symbol] = { bid: p.bid, ask: p.ask };
-            });
-            setRealPrices(pricesMap);
+          
+          // Use isLive flag from server (heartbeat within 10s)
+          if (data.isLive) {
             setExtensionConnected(true);
+            if (data.prices && data.prices.length > 0) {
+              const pricesMap: Record<string, { bid: number; ask: number }> = {};
+              data.prices.forEach((p: any) => {
+                pricesMap[p.symbol] = { bid: p.bid, ask: p.ask };
+              });
+              setRealPrices(pricesMap);
+            }
           } else {
             setExtensionConnected(false);
           }

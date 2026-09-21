@@ -66,15 +66,17 @@ async function sendToDashboard(prices) {
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PRICES_UPDATE') {
-    latestPrices = message.prices;
+    latestPrices = message.prices || [];
+    const now = Date.now();
     
-    // Send to dashboard
-    sendToDashboard(message.prices);
+    // Send to dashboard (even if empty, keep heartbeat)
+    sendToDashboard(message.prices || []);
     
     // Store in extension storage
     chrome.storage.local.set({
-      latestPrices: message.prices,
-      lastUpdate: Date.now()
+      latestPrices: message.prices || [],
+      lastUpdate: now,
+      lastHeartbeat: now
     });
     
     sendResponse({ received: true });

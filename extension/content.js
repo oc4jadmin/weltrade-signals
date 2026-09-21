@@ -84,6 +84,19 @@ function extractPrices() {
 function sendPrices() {
   const prices = extractPrices();
   
+  // Always send heartbeat even if no prices, to keep connection alive
+  const message = {
+    type: 'PRICES_UPDATE',
+    prices: prices,
+    timestamp: Date.now(),
+    active: true
+  };
+  
+  // Always send heartbeat so dashboard knows extension is alive
+  try {
+    chrome.runtime.sendMessage(message).catch(() => {});
+  } catch (e) {}
+  
   if (prices.length > 0) {
     try {
       localStorage.setItem('weltrade_prices', JSON.stringify({
@@ -91,11 +104,6 @@ function sendPrices() {
         updated: Date.now()
       }));
     } catch (e) {}
-    
-    chrome.runtime.sendMessage({
-      type: 'PRICES_UPDATE',
-      prices: prices
-    }).catch(() => {});
   }
 }
 

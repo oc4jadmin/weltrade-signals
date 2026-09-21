@@ -4,17 +4,23 @@ import { NextRequest, NextResponse } from 'next/server';
 let realTimePrices = {
   prices: [] as any[],
   lastUpdate: 0,
+  lastHeartbeat: 0,
   source: ''
 };
+
+// Considered "live" if we got a heartbeat within last 10s
+const LIVE_THRESHOLD_MS = 10000;
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const now = Date.now();
     
     if (body.prices && Array.isArray(body.prices)) {
       realTimePrices = {
         prices: body.prices,
-        lastUpdate: Date.now(),
+        lastUpdate: now,
+        lastHeartbeat: now,
         source: body.source || 'unknown'
       };
       
@@ -22,7 +28,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'Prices received',
         count: body.prices.length,
-        timestamp: realTimePrices.lastUpdate
+        timestamp: now
       });
     }
     
@@ -40,10 +46,16 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
+  const now = Date.now();
+  const age = now - realTimePrices.lastHeartbeat;
+  const isLive = age < LIVE_THRESHOLD_MS && realTimePrices.lastHeartbeat > 0;
+  
   return NextResponse.json({
     prices: realTimePrices.prices,
     lastUpdate: realTimePrices.lastUpdate,
-    source: realTimePrices.source,
-    age: Date.now() - realTimePrices.lastUpdate
+    lastHeartbeat: realTimePrices.lastHeartbeat,
+    age: age,
+    isLive: isLive,
+    source: realTimePrices.source
   });
 }
