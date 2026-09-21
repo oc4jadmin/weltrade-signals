@@ -10,58 +10,73 @@ const SYMBOLS = [
   { display: 'SFX Vol 20', code: 'FXVOL20' },
 ];
 
-let lastPrices = {};
 let extractionInterval = null;
+let extractionCount = 0;
+let debugLog = [];
 
-// Extract price from market watch
+// Extract price by walking text nodes
 function extractPrices() {
   const prices = [];
-  const priceData = {};
+  const found = {};
 
-  // Helper: find symbol by display name in any element
-  const findSymbolInText = (text) => {
-    for (const sym of SYMBOLS) {
-      if (text.includes(sym.display)) return sym;
+  // Use TreeWalker to visit all text nodes
+  const walker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT,
+    null,
+    false
+  );
+
+  const textNodes = [];
+  let node;
+  while (node = walker.nextNode()) {
+    const text = node.textContent || '';
+    if (text.trim().length > 0) {
+      textNodes.push({ node, text: text.trim() });
     }
-    return null;
-  };
+  }
 
-  // Method 1: Scan all elements, find ones containing "SFX Vol XX"
-  const allElements = document.querySelectorAll('*');
-  allElements.forEach(el => {
-    // Skip elements with too many children (containers, not leaves)
-    if (el.children.length > 5) return;
-    if (!el.textContent) return;
-
-    const text = el.textContent || '';
-    const sym = findSymbolInText(text);
-    if (!sym) return;
-
-    // Find numeric prices in same row or parent
-    let scope = el;
-    let depth = 0;
-    while (scope && depth < 6) {
-      const scopeText = scope.textContent || '';
-      // Match decimals like 3646.26, 270101.52
-      const numbers = scopeText.match(/\b\d{1,10}\.\d{2,5}\b/g);
-      if (numbers && numbers.length >= 2) {
-        // Take the first two reasonable numbers as bid/ask
-        if (!priceData[sym.code]) {
-          priceData[sym.code] = {
-            symbol: sym.code,
-            bid: parseFloat(numbers[0]),
-            ask: parseFloat(numbers[1]),
-            timestamp: Date.now()
-          };
+  // For each text node, check if it contains a symbol
+  textNodes.forEach(({ node, text }) => {
+    for (const sym of SYMBOLS) {
+      if (text.includes(sym.display) && !found[sym.code]) {
+        // Walk up to find a container with price numbers
+        let scope = node.parentElement;
+        let depth = 0;
+        while (scope && depth < 10) {
+          const scopeText = scope.textContent || '';
+          // Match decimals - prices typically have 2-5 decimals
+          const numbers = scopeText.match(/\b\d{1,10}\.\d{2,5}\b/g);
+          if (numbers && numbers.length >= 2) {
+            const validNumbers = numbers
+              .map(n => parseFloat(n))
+              .filter(n => n > 0.01 && n < 10000000);
+            if (validNumbers.length >= 2) {
+              found[sym.code] = {
+                symbol: sym.code,
+                bid: validNumbers[0],
+                ask: validNumbers[1],
+                timestamp: Date.now()
+              };
+              debugLog.push(`${sym.display} → bid:${validNumbers[0]} ask:${validNumbers[1]}`);
+              if (debugLog.length > 20) debugLog.shift();
+            }
+            break;
+          }
+          scope = scope.parentElement;
+          depth++;
         }
-        break;
       }
-      scope = scope.parentElement;
-      depth++;
     }
   });
 
-  Object.values(priceData).forEach(p => prices.push(p));
+  extractionCount++;
+  Object.values(found).forEach(p => prices.push(p));
+  
+  if (extractionCount % 10 === 0) {
+    console.log(`[Weltrade Extractor] Scan #${extractionCount}: found ${prices.length} symbols`, debugLog.slice(-5));
+  }
+  
   return prices;
 }
 
@@ -70,36 +85,59 @@ function sendPrices() {
   const prices = extractPrices();
   
   if (prices.length > 0) {
-    // Store in localStorage for dashboard access
     try {
       localStorage.setItem('weltrade_prices', JSON.stringify({
         prices: prices,
         updated: Date.now()
       }));
-    } catch (e) {
-      console.log('Weltrade Extractor: Could not save to localStorage');
-    }
+    } catch (e) {}
     
-    // Send to background script
     chrome.runtime.sendMessage({
       type: 'PRICES_UPDATE',
       prices: prices
-    });
-    
-    console.log('Weltrade Extractor: Sent', prices.length, 'prices');
+    }).catch(() => {});
   }
+}
+
+// Scan current page and return results (for manual debug)
+function scanNow() {
+  const prices = extractPrices();
+  const symbolsOnPage = [];
+  
+  // Also scan for any "SFX Vol" references
+  const bodyText = document.body.textContent || '';
+  SYMBOLS.forEach(sym => {
+    if (bodyText.includes(sym.display)) {
+      symbolsOnPage.push(sym.display);
+    }
+  });
+  
+  return {
+    prices: prices,
+    symbolsFound: symbolsOnPage,
+    debugLog: debugLog.slice(-10),
+    bodyTextLength: bodyText.length
+  };
 }
 
 // Start extraction
 function startExtraction() {
   if (extractionInterval) return;
   
-  console.log('Weltrade Extractor: Starting price extraction...');
-  sendPrices(); // Initial extraction
-  extractionInterval = setInterval(sendPrices, 1000); // Every second
+  console.log('[Weltrade Extractor] Starting...');
+  console.log('[Weltrade Extractor] Page URL:', window.location.href);
+  
+  // Initial scan to log what we see
+  setTimeout(() => {
+    const initial = scanNow();
+    console.log('[Weltrade Extractor] Initial scan:', initial);
+  }, 2000);
+  
+  sendPrices();
+  extractionInterval = setInterval(sendPrices, 1000);
 }
 
-// Listen for messages from background
+// Listen for messages from background/popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'START_EXTRACTION') {
     startExtraction();
@@ -115,11 +153,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_PRICES') {
     sendResponse({ prices: extractPrices() });
   }
+  if (message.type === 'SCAN_NOW') {
+    sendResponse(scanNow());
+  }
 });
 
-// Auto-start when page loads
+// Auto-start
 if (document.readyState === 'complete') {
   startExtraction();
 } else {
-  window.addEventListener('load', startExtraction);
+  window.addEventListener('load', () => {
+    setTimeout(startExtraction, 1000);
+  });
 }

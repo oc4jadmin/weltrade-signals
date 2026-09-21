@@ -157,6 +157,53 @@ connectBtn.addEventListener('click', toggleExtraction);
 dashboardUrlInput.addEventListener('change', saveDashboardUrl);
 dashboardUrlInput.addEventListener('blur', saveDashboardUrl);
 
+// Debug scan button
+const scanBtn = document.getElementById('scan-btn');
+const scanResult = document.getElementById('scan-result');
+
+scanBtn?.addEventListener('click', async () => {
+  scanResult.textContent = 'Scanning...';
+  
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) {
+      scanResult.textContent = 'No active tab';
+      return;
+    }
+    
+    chrome.tabs.sendMessage(tab.id, { type: 'SCAN_NOW' }, (response) => {
+      if (chrome.runtime.lastError) {
+        scanResult.textContent = 'Cannot scan: ' + chrome.runtime.lastError.message + '\n\nMake sure you are on a Weltrade page.';
+        return;
+      }
+      if (!response) {
+        scanResult.textContent = 'No response from page';
+        return;
+      }
+      
+      const lines = [
+        `URL: ${tab.url}`,
+        `Body text: ${response.bodyTextLength} chars`,
+        `Symbols on page: ${response.symbolsFound.join(', ') || 'NONE'}`,
+        `Prices found: ${response.prices.length}`,
+      ];
+      
+      response.prices.forEach(p => {
+        lines.push(`  ${p.symbol}: bid=${p.bid} ask=${p.ask}`);
+      });
+      
+      if (response.debugLog && response.debugLog.length > 0) {
+        lines.push('--- Debug log ---');
+        lines.push(...response.debugLog.slice(-5));
+      }
+      
+      scanResult.textContent = lines.join('\n');
+    });
+  } catch (e) {
+    scanResult.textContent = 'Error: ' + e.message;
+  }
+});
+
 // Initialize
 async function init() {
   await loadSavedUrl();
