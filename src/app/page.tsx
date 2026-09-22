@@ -54,14 +54,16 @@ interface MT5Config {
   connected: boolean;
 }
 
-// Synthetic Indices symbols - Weltrade FX VOL
+// Synthetic Indices symbols - Weltrade FX VOL (only active symbols)
 const SYMBOLS = [
-  { name: "FX VOL 99", symbol: "FXVOL99", digits: 2 },
-  { name: "FX VOL 80", symbol: "FXVOL80", digits: 2 },
-  { name: "FX VOL 60", symbol: "FXVOL60", digits: 2 },
-  { name: "FX VOL 40", symbol: "FXVOL40", digits: 2 },
-  { name: "FX VOL 20", symbol: "FXVOL20", digits: 2 },
+  { name: "FX VOL 99", symbol: "FXVOL99", digits: 2, active: true },
+  { name: "FX VOL 80", symbol: "FXVOL80", digits: 2, active: true },
+  { name: "FX VOL 60", symbol: "FXVOL60", digits: 2, active: false },
+  { name: "FX VOL 40", symbol: "FXVOL40", digits: 2, active: false },
+  { name: "FX VOL 20", symbol: "FXVOL20", digits: 2, active: false },
 ];
+
+const ACTIVE_SYMBOLS = SYMBOLS.filter(s => s.active);
 
 // Generate mock price data
 const generatePriceData = (basePrice: number, count: number) => {
@@ -84,74 +86,181 @@ const generatePriceData = (basePrice: number, count: number) => {
   return data;
 };
 
-// Generate mock signals
-const generateSignals = (): Signal[] => {
+// Technical indicator helpers
+function calculateEMA(data: number[], period: number): number[] {
+  const k = 2 / (period + 1);
+  const ema: number[] = [];
+  let prevEma = data[0];
+  for (let i = 0; i < data.length; i++) {
+    if (i === 0) {
+      ema.push(data[i]);
+    } else {
+      const value = data[i] * k + prevEma * (1 - k);
+      ema.push(value);
+      prevEma = value;
+    }
+  }
+  return ema;
+}
+
+function calculateStochastic(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  kPeriod: number,
+  dPeriod: number,
+  smoothing: number
+): { k: number[]; d: number[] } {
+  const rawK: number[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (i < kPeriod - 1) {
+      rawK.push(50);
+      continue;
+    }
+    const sliceHighs = highs.slice(i - kPeriod + 1, i + 1);
+    const sliceLows = lows.slice(i - kPeriod + 1, i + 1);
+    const highest = Math.max(...sliceHighs);
+    const lowest = Math.min(...sliceLows);
+    const range = highest - lowest;
+    rawK.push(range === 0 ? 50 : ((closes[i] - lowest) / range) * 100);
+  }
+
+  const smoothK = sma(rawK, smoothing);
+  const d = sma(smoothK, dPeriod);
+  return { k: smoothK, d };
+}
+
+function sma(data: number[], period: number): number[] {
+  const result: number[] = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      result.push(data[i]);
+      continue;
+    }
+    const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+    result.push(sum / period);
+  }
+  return result;
+}
+
+function calculateATR(highs: number[], lows: number[], closes: number[], period: number): number[] {
+  const tr: number[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (i === 0) {
+      tr.push(highs[i] - lows[i]);
+    } else {
+      const tr1 = highs[i] - lows[i];
+      const tr2 = Math.abs(highs[i] - closes[i - 1]);
+      const tr3 = Math.abs(lows[i] - closes[i - 1]);
+      tr.push(Math.max(tr1, tr2, tr3));
+    }
+  }
+  return sma(tr, period);
+}
+
+// Generate scalping signals based on EMA50 + Stochastic (5,3,3)
+function generateScalpingSignals(
+  candles: Array<{ time: number; open: number; high: number; low: number; close: number }>,
+  symbol: string,
+  timeframe: string
+): Signal[] {
   const signals: Signal[] = [];
-  const now = Date.now();
+  if (candles.length < 60) return signals;
 
-  // Scalping signals (M15, M5, M1)
+  const closes = candles.map(c => c.close);
+  const highs = candles.map(c => c.high);
+  const lows = candles.map(c => c.low);
+
+  const ema50 = calculateEMA(closes, 50);
+  const stoch = calculateStochastic(highs, lows, closes, 5, 3, 3);
+  const atr = calculateATR(highs, lows, closes, 14);
+
+  const lastIdx = candles.length - 1;
+  const prevIdx = lastIdx - 1;
+
+  const price = closes[lastIdx];
+  const ema = ema50[lastIdx];
+  const prevK = stoch.k[prevIdx];
+  const currK = stoch.k[lastIdx];
+  const prevD = stoch.d[prevIdx];
+  const currD = stoch.d[lastIdx];
+  const currentATR = atr[lastIdx];
+
+  // Determine trend with EMA50
+  const isUptrend = price > ema;
+  const isDowntrend = price < ema;
+
+  // BUY: Uptrend + Stochastic cross up below 20
+  if (isUptrend && prevK <= 20 && currK > 20 && currK > currD && prevK <= prevD) {
+    const swingLow = Math.min(...lows.slice(lastIdx - 10, lastIdx + 1));
+    const sl = Math.min(swingLow - currentATR * 0.5, price - currentATR * 1.5);
+    signals.push({
+      id: `scalp-buy-${symbol}-${timeframe}-${candles[lastIdx].time}`,
+      symbol,
+      type: "BUY",
+      timeframe,
+      entry: Number(price.toFixed(2)),
+      sl: Number(sl.toFixed(2)),
+      tp1: Number((price + currentATR * 1).toFixed(2)),
+      tp2: Number((price + currentATR * 2).toFixed(2)),
+      tp3: Number((price + currentATR * 3).toFixed(2)),
+      pip: Number((currentATR * 1).toFixed(1)),
+      timestamp: new Date(candles[lastIdx].time * 1000),
+      status: "ACTIVE",
+      indicator: "EMA50 + Stochastic (5,3,3)",
+      confidence: Math.floor(75 + Math.random() * 15),
+    });
+  }
+
+  // SELL: Downtrend + Stochastic cross down above 80
+  if (isDowntrend && prevK >= 80 && currK < 80 && currK < currD && prevK >= prevD) {
+    const swingHigh = Math.max(...highs.slice(lastIdx - 10, lastIdx + 1));
+    const sl = Math.max(swingHigh + currentATR * 0.5, price + currentATR * 1.5);
+    signals.push({
+      id: `scalp-sell-${symbol}-${timeframe}-${candles[lastIdx].time}`,
+      symbol,
+      type: "SELL",
+      timeframe,
+      entry: Number(price.toFixed(2)),
+      sl: Number(sl.toFixed(2)),
+      tp1: Number((price - currentATR * 1).toFixed(2)),
+      tp2: Number((price - currentATR * 2).toFixed(2)),
+      tp3: Number((price - currentATR * 3).toFixed(2)),
+      pip: Number((currentATR * 1).toFixed(1)),
+      timestamp: new Date(candles[lastIdx].time * 1000),
+      status: "ACTIVE",
+      indicator: "EMA50 + Stochastic (5,3,3)",
+      confidence: Math.floor(75 + Math.random() * 15),
+    });
+  }
+
+  return signals;
+}
+
+// Generate signals from candle history using EMA50 + Stochastic
+const generateSignalsFromHistory = (
+  candleHistory: Record<string, Array<{ time: number; open: number; high: number; low: number; close: number }>>
+): Signal[] => {
+  const signals: Signal[] = [];
   const scalpingTimeframes = ["M1", "M5", "M15"];
-  scalpingTimeframes.forEach((tf, idx) => {
-    const count = 3 - idx;
-    for (let i = 0; i < count; i++) {
-      const symbol = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-      const isBuy = Math.random() > 0.5;
-      const entry = 100 + Math.random() * 50;
-      const slDist = 8 + Math.random() * 4;
-      const tp1Dist = 10 + Math.random() * 5;
-      const tp2Dist = 18 + Math.random() * 8;
-      const tp3Dist = 28 + Math.random() * 12;
-      signals.push({
-        id: `scalp-${tf}-${i}-${now}`,
-        symbol: symbol.symbol,
-        type: isBuy ? "BUY" : "SELL",
-        timeframe: tf,
-        entry: Number(entry.toFixed(2)),
-        sl: Number((isBuy ? entry - slDist : entry + slDist).toFixed(2)),
-        tp1: Number((isBuy ? entry + tp1Dist : entry - tp1Dist).toFixed(2)),
-        tp2: Number((isBuy ? entry + tp2Dist : entry - tp2Dist).toFixed(2)),
-        tp3: Number((isBuy ? entry + tp3Dist : entry - tp3Dist).toFixed(2)),
-        pip: Number((Math.random() * 20 + 5).toFixed(1)),
-        timestamp: new Date(now - i * 60000 * (15 - idx * 5)),
-        status: Math.random() > 0.3 ? "ACTIVE" : (Math.random() > 0.5 ? "HIT_TP1" : "HIT_SL"),
-        indicator: "ZigZag + Stochastic (5,3,3)",
-        confidence: Math.floor(Math.random() * 20 + 80),
-      });
-    }
-  });
 
-  // Intraday signals (M30, H1)
-  const intradayTimeframes = ["M30", "H1"];
-  intradayTimeframes.forEach((tf, tfIdx) => {
-    for (let i = 0; i < 4; i++) {
-      const symbol = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-      const isBuy = Math.random() > 0.5;
-      const entry = 100 + Math.random() * 50;
-      const slDist = 15 + Math.random() * 8;
-      const tp1Dist = 20 + Math.random() * 10;
-      const tp2Dist = 35 + Math.random() * 15;
-      const tp3Dist = 50 + Math.random() * 20;
-      const smcPatterns = ["CHoCH", "BOS", "FVG", "OB"];
-      signals.push({
-        id: `intra-${tf}-${i}-${now}`,
-        symbol: symbol.symbol,
-        type: isBuy ? "BUY" : "SELL",
-        timeframe: tf,
-        entry: Number(entry.toFixed(2)),
-        sl: Number((isBuy ? entry - slDist : entry + slDist).toFixed(2)),
-        tp1: Number((isBuy ? entry + tp1Dist : entry - tp1Dist).toFixed(2)),
-        tp2: Number((isBuy ? entry + tp2Dist : entry - tp2Dist).toFixed(2)),
-        tp3: Number((isBuy ? entry + tp3Dist : entry - tp3Dist).toFixed(2)),
-        pip: Number((Math.random() * 40 + 20).toFixed(1)),
-        timestamp: new Date(now - i * 60000 * (30 - tfIdx * 10)),
-        status: ["ACTIVE", "HIT_TP1", "HIT_TP2", "HIT_TP3", "HIT_SL"][Math.floor(Math.random() * 5)] as SignalStatus,
-        indicator: smcPatterns[Math.floor(Math.random() * smcPatterns.length)] + " (SMC)",
-        confidence: Math.floor(Math.random() * 15 + 85),
-      });
-    }
+  ACTIVE_SYMBOLS.forEach(sym => {
+    scalpingTimeframes.forEach(tf => {
+      const key = `${sym.symbol}-${tf}`;
+      const candles = candleHistory[key];
+      if (candles && candles.length >= 60) {
+        const newSignals = generateScalpingSignals(candles, sym.symbol, tf);
+        signals.push(...newSignals);
+      }
+    });
   });
 
   return signals.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+};
+
+// Generate mock signals (fallback)
+const generateSignals = (): Signal[] => {
+  return [];
 };
 
 // Sidebar Component
@@ -318,16 +427,23 @@ const PriceTicker = ({ realPrices }: { realPrices: Record<string, { bid: number;
 };
 
 // Chart Component
-const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Record<string, { bid: number; ask: number }> }) => {
+const ChartPanel = ({ 
+  symbol, 
+  realPrices, 
+  candleHistory, 
+  setCandleHistory 
+}: { 
+  symbol: string; 
+  realPrices?: Record<string, { bid: number; ask: number }>;
+  candleHistory: Record<string, Array<{ time: number; open: number; high: number; low: number; close: number }>>;
+  setCandleHistory: React.Dispatch<React.SetStateAction<Record<string, Array<{ time: number; open: number; high: number; low: number; close: number }>>>>;
+}) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
   const candleSeriesRef = useRef<any>(null);
   const volumeSeriesRef = useRef<any>(null);
   const lastPriceRef = useRef<{ price: number; time: number; openPrice: number; highPrice: number; lowPrice: number } | null>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState("M5");
-
-  // Persist candle history per symbol+timeframe
-  const [candleHistory, setCandleHistory] = useState<Record<string, Array<{ time: number; open: number; high: number; low: number; close: number }>>>({});
 
   // Convert timeframe to seconds
   const timeframeSeconds = {
@@ -1176,6 +1292,9 @@ export default function Dashboard() {
   // Extension connection state
   const [extensionConnected, setExtensionConnected] = useState(false);
   const [realPrices, setRealPrices] = useState<Record<string, { bid: number; ask: number }>>({});
+  
+  // Shared candle history across charts
+  const [candleHistory, setCandleHistory] = useState<Record<string, Array<{ time: number; open: number; high: number; low: number; close: number }>>>({});
 
   // Poll for real prices from extension
   useEffect(() => {
@@ -1211,17 +1330,19 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Initialize signals
+  // Generate signals when candle history updates
   useEffect(() => {
-    setSignals(generateSignals());
-
-    // Refresh signals every 30 seconds
-    const interval = setInterval(() => {
-      setSignals(generateSignals());
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
+    if (Object.keys(candleHistory).length === 0) return;
+    
+    const newSignals = generateSignalsFromHistory(candleHistory);
+    setSignals(prev => {
+      // Keep old signals that are still active
+      const activeOld = prev.filter(s => s.status === "ACTIVE");
+      const activeIds = new Set(activeOld.map(s => s.id));
+      const filteredNew = newSignals.filter(s => !activeIds.has(s.id));
+      return [...activeOld, ...filteredNew].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    });
+  }, [candleHistory]);
 
   const activeSignalsCount = signals.filter((s) => s.status === "ACTIVE").length;
 
@@ -1362,7 +1483,12 @@ export default function Dashboard() {
               </div>
 
               {/* Chart */}
-              <ChartPanel symbol={selectedSymbol} realPrices={realPrices} />
+              <ChartPanel 
+  symbol={selectedSymbol} 
+  realPrices={realPrices}
+  candleHistory={candleHistory}
+  setCandleHistory={setCandleHistory}
+/>
 
               {/* Signal Panels */}
               <ScalpingPanel signals={signals} />
