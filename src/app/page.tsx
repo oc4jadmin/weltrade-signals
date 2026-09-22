@@ -1348,7 +1348,7 @@ export default function Dashboard() {
                 const currentPrice = (priceInfo.bid + priceInfo.ask) / 2;
                 const { tp1, tp2, tp3, sl, type } = signal;
                 
-                let newStatus = signal.status;
+                let newStatus: SignalStatus = signal.status;
                 
                 if (type === "BUY") {
                   if (currentPrice >= tp3) newStatus = "HIT_TP3";
@@ -1363,7 +1363,7 @@ export default function Dashboard() {
                 }
                 
                 if (newStatus !== signal.status) {
-                  return { ...signal, status: newStatus as SignalStatus };
+                  return { ...signal, status: newStatus };
                 }
                 return signal;
               }));
