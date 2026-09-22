@@ -4,7 +4,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Weltrade Signals"
 #property link      "https://weltrade-signals.vercel.app"
-#property version   "2.00"
+#property version   "2.01"
 #property strict
 
 input string DashboardUrl = "https://weltrade-signals.vercel.app/api/prices";
