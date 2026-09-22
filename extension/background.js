@@ -141,4 +141,23 @@ chrome.action.onClicked.addListener(async (tab) => {
   }
 });
 
+// Wake up every 5 seconds to keep service worker alive
+chrome.alarms.create('heartbeat', { periodInMinutes: 0.08 });
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'heartbeat') {
+    // Try to inject/re-inject content script on active Weltrade tab
+    chrome.tabs.query({ url: '*://secure.weltrade.com/*' }, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, { type: 'PING' }, (response) => {
+          if (chrome.runtime.lastError) {
+            // Content script not there, inject it
+            injectScript(tab.id);
+          }
+        });
+      });
+    });
+  }
+});
+
 console.log('[Background] Weltrade Extractor background script loaded');

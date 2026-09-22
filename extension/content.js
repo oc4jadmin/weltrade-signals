@@ -115,6 +115,9 @@
 
   // Listen for messages
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type === 'PING') {
+      sendResponse({ alive: true });
+    }
     if (msg.type === 'START_EXTRACTION') {
       startExtraction();
       sendResponse({ status: 'started' });
