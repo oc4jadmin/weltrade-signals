@@ -185,8 +185,8 @@ void CheckSignal(string mt5Symbol, string dashSymbol, ENUM_TIMEFRAMES tf, string
    datetime currentTime = iTime(mt5Symbol, tf, 0);
    if(currentTime == 0) currentTime = TimeLocal();
    
-   // BUY signal
-   if(isUptrend && prevK <= 20 && currK > 20 && currK > currD && prevK <= prevD)
+   // BUY signal (relaxed: cross up below 30)
+   if(isUptrend && prevK <= 30 && currK > 30 && currK > currD && prevK <= prevD)
    {
       if(currentTime != LastSignalTime[symbolIdx][tfIdx][0])
       {
@@ -195,8 +195,8 @@ void CheckSignal(string mt5Symbol, string dashSymbol, ENUM_TIMEFRAMES tf, string
       }
    }
    
-   // SELL signal
-   if(isDowntrend && prevK >= 80 && currK < 80 && currK < currD && prevK >= prevD)
+   // SELL signal (relaxed: cross down above 70)
+   if(isDowntrend && prevK >= 70 && currK < 70 && currK < currD && prevK >= prevD)
    {
       if(currentTime != LastSignalTime[symbolIdx][tfIdx][1])
       {
