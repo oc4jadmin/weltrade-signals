@@ -432,8 +432,6 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
   }, [symbol, selectedTimeframe]);
 
   // Live price update - uses a fast tick series that updates frequently
-  const lastPriceRef = useRef<{ price: number; time: number } | null>(null);
-  
   useEffect(() => {
     if (!candleSeriesRef.current || !realPrices) return;
     
