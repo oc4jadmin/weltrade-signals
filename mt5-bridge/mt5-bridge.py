@@ -8,15 +8,20 @@ if not mt5.initialize():
     print("MT5 initialization failed:", mt5.last_error())
     quit()
 
+# Ensure symbols are enabled in Market Watch
+mt5.symbol_select("FX Vol 99", True)
+mt5.symbol_select("FX Vol 80", True)
+
 print("MT5 Bridge Active! Connected to MT5 Terminal.")
 
-async def handler(websocket, path):
+# Optional 'path=None' parameter ensures compatibility with websockets v10+ and v12+
+async def handler(websocket, path=None):
     print("Client Web Terminal Connected!")
     while True:
         try:
-            # Fetch latest tick for Vol 99
-            tick_99 = mt5.symbol_info_tick("Volatility 99 Index")
-            tick_80 = mt5.symbol_info_tick("Volatility 80 Index")
+            # Fetch latest ticks using exact MT5 symbol names
+            tick_99 = mt5.symbol_info_tick("FX Vol 99")
+            tick_80 = mt5.symbol_info_tick("FX Vol 80")
 
             payload = {
                 "type": "tick_update",
@@ -35,6 +40,9 @@ async def handler(websocket, path):
             }
             await websocket.send(json.dumps(payload))
             await asyncio.sleep(0.5) # 500ms tick stream
+        except websockets.exceptions.ConnectionClosed:
+            print("Client Web Terminal Disconnected.")
+            break
         except Exception as e:
             print("Connection error:", e)
             break
@@ -44,4 +52,5 @@ async def main():
         print("WebSocket Server running at ws://localhost:8080")
         await asyncio.Future()  # run forever
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

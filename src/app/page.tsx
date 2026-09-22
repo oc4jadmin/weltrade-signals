@@ -1337,6 +1337,36 @@ export default function Dashboard() {
                 pricesMap[p.symbol] = { bid: p.bid, ask: p.ask };
               });
               setRealPrices(pricesMap);
+              
+              // Update ACTIVE signal statuses based on current prices
+              setSignals(prev => prev.map(signal => {
+                if (signal.status !== "ACTIVE") return signal;
+                
+                const priceInfo = pricesMap[signal.symbol];
+                if (!priceInfo) return signal;
+                
+                const currentPrice = (priceInfo.bid + priceInfo.ask) / 2;
+                const { tp1, tp2, tp3, sl, type } = signal;
+                
+                let newStatus = signal.status;
+                
+                if (type === "BUY") {
+                  if (currentPrice >= tp3) newStatus = "HIT_TP3";
+                  else if (currentPrice >= tp2) newStatus = "HIT_TP2";
+                  else if (currentPrice >= tp1) newStatus = "HIT_TP1";
+                  else if (currentPrice <= sl) newStatus = "HIT_SL";
+                } else {
+                  if (currentPrice <= tp3) newStatus = "HIT_TP3";
+                  else if (currentPrice <= tp2) newStatus = "HIT_TP2";
+                  else if (currentPrice <= tp1) newStatus = "HIT_TP1";
+                  else if (currentPrice >= sl) newStatus = "HIT_SL";
+                }
+                
+                if (newStatus !== signal.status) {
+                  return { ...signal, status: newStatus as SignalStatus };
+                }
+                return signal;
+              }));
             }
           } else {
             setExtensionConnected(false);
