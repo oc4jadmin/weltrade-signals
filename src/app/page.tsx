@@ -1333,12 +1333,12 @@ export default function Dashboard() {
   }, []);
   
   const handleLogin = () => {
-    if (loginForm.username === "admin" && loginForm.password === "admin123") {
+    if (loginForm.username === "admin" && loginForm.password === "Admin@2026") {
       setUserRole("admin");
       setIsLoggedIn(true);
       localStorage.setItem('weltrade_user_role', 'admin');
       setLoginError("");
-    } else if (loginForm.username === "user" && loginForm.password === "user123") {
+    } else if (loginForm.username === "user" && loginForm.password === "User@2026") {
       setUserRole("user");
       setIsLoggedIn(true);
       localStorage.setItem('weltrade_user_role', 'user');
@@ -1539,8 +1539,8 @@ export default function Dashboard() {
             <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
               <Zap className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-white">Weltrade Signals</h1>
-            <p className="text-slate-400 mt-2">Sign in to access dashboard</p>
+            <h1 className="text-2xl font-bold text-white">TheKillers Signals</h1>
+            <p className="text-slate-400 mt-2">Synthetic Indices Trading Dashboard</p>
           </div>
           
           <div className="space-y-4">
@@ -1581,9 +1581,7 @@ export default function Dashboard() {
             </button>
             
             <div className="text-center text-sm text-slate-500 mt-6">
-              <p>Demo credentials:</p>
-              <p>Admin: admin / admin123</p>
-              <p>User: user / user123</p>
+              <p>Authorized access only</p>
             </div>
           </div>
         </div>
