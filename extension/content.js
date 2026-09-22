@@ -132,10 +132,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Mark as loaded for debugging
 window.__weltradeExtLoaded = true;
+console.log('[Weltrade] Content script loaded at', new Date().toISOString());
 
-// Auto-start
-if (document.readyState === 'complete') {
-  startExtraction();
+// Auto-start with retry
+function tryStart() {
+  if (document.body) {
+    startExtraction();
+  } else {
+    setTimeout(tryStart, 500);
+  }
+}
+
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  tryStart();
 } else {
-  window.addEventListener('load', () => setTimeout(startExtraction, 1000));
+  window.addEventListener('DOMContentLoaded', tryStart);
+  window.addEventListener('load', tryStart);
 }
