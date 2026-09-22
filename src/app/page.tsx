@@ -1360,9 +1360,13 @@ export default function Dashboard() {
         if (response.ok) {
           const data = await response.json();
           if (data.signals && Array.isArray(data.signals)) {
+            const formattedSignals: Signal[] = data.signals.map((s: any) => ({
+              ...s,
+              timestamp: new Date(s.timestamp)
+            }));
             setSignals(prev => {
               // Merge with existing, keep latest 100
-              const merged = [...data.signals, ...prev];
+              const merged = [...formattedSignals, ...prev];
               const unique = Array.from(new Map(merged.map(s => [s.id, s])).values());
               return unique.slice(0, 100).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
             });
