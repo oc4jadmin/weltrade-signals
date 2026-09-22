@@ -382,17 +382,29 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
       // Generate historical data ending at current real price
       const data = generatePriceData(basePrice, 100);
       // Adjust last candle to match real price for smooth transition
-      if (data.length > 0 && realPrice) {
+      if (data.length > 0) {
         const last = data[data.length - 1];
-        const midReal = (realPrice.bid + realPrice.ask) / 2;
+        const midReal = realPrice ? (realPrice.bid + realPrice.ask) / 2 : basePrice;
         last.close = midReal;
-        last.open = midReal;
-        last.high = midReal;
-        last.low = midReal;
-        // Use actual current time for last candle so live updates can extend
-        last.time = Math.floor(Date.now() / 1000);
+        // Keep some wick to show it was a real candle
+        last.high = Math.max(last.high, midReal);
+        last.low = Math.min(last.low, midReal);
+        // Ensure last candle time is aligned to timeframe
+        last.time = Math.floor(last.time / timeframeSeconds) * timeframeSeconds;
       }
       candleSeries.setData(data as any);
+      
+      // Init lastPriceRef from last historical candle
+      if (data.length > 0) {
+        const last = data[data.length - 1];
+        lastPriceRef.current = {
+          price: last.close,
+          time: last.time,
+          openPrice: last.open,
+          highPrice: last.high,
+          lowPrice: last.low,
+        };
+      }
 
       // Add volume
       const volumeSeries = chart.addHistogramSeries({
@@ -488,8 +500,11 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
           lowPrice: midPrice,
         };
       }
+      
+      // Keep chart scrolled to right
+      chartRef.current?.timeScale()?.scrollToRealTime();
     } catch (e) {
-      // Ignore update errors
+      console.warn('[Chart] Update failed:', e);
     }
   }, [realPrices, symbol, timeframeSeconds]);
 
