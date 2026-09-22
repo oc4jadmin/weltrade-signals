@@ -42,6 +42,11 @@ void OnTimer()
       return;
    }
    
+   if(!ok80)
+   {
+      Print("WeltradePriceSender: FX Vol 80 not found - skipping");
+   }
+   
    string json = "{";
    json += "\"prices\":[";
    
@@ -65,7 +70,13 @@ void OnTimer()
    
    char data[], result[];
    string headers;
-   StringToCharArray(json, data);
+   int jsonSize = StringToCharArray(json, data);
+   
+   // Remove trailing null terminator
+   if(jsonSize > 0)
+   {
+      ArrayResize(data, jsonSize - 1);
+   }
    
    int res = WebRequest("POST", DashboardUrl, headers, 5000, data, result, headers);
    
