@@ -326,6 +326,9 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
   const lastPriceRef = useRef<{ price: number; time: number; openPrice: number; highPrice: number; lowPrice: number } | null>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState("M5");
 
+  // Persist candle history per symbol+timeframe
+  const [candleHistory, setCandleHistory] = useState<Record<string, Array<{ time: number; open: number; high: number; low: number; close: number }>>>({});
+
   // Convert timeframe to seconds
   const timeframeSeconds = {
     M1: 60,
@@ -361,6 +364,19 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
         timeScale: {
           borderColor: "#334155",
           timeVisible: true,
+          rightOffset: 12,
+          barSpacing: 6,
+        },
+        handleScroll: {
+          mouseWheel: true,
+          pressedMouseMove: true,
+          horzTouchDrag: true,
+          vertTouchDrag: true,
+        },
+        handleScale: {
+          axisPressedMouseMove: true,
+          mouseWheel: true,
+          pinch: true,
         },
       });
 
@@ -379,19 +395,33 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
         ? (realPrice.bid + realPrice.ask) / 2
         : 100 + Math.random() * 50;
 
-      // Generate historical data ending at current real price
-      const data = generatePriceData(basePrice, 100);
-      // Adjust last candle to match real price for smooth transition
-      if (data.length > 0) {
+      // Try to load persisted history for this symbol+timeframe
+      const historyKey = `${symbol}-${selectedTimeframe}`;
+      const persistedHistory = candleHistory[historyKey];
+      
+      let data: Array<{ time: number; open: number; high: number; low: number; close: number }>;
+      
+      if (persistedHistory && persistedHistory.length > 0) {
+        data = [...persistedHistory];
+        // Update last candle to current real price
         const last = data[data.length - 1];
-        const midReal = realPrice ? (realPrice.bid + realPrice.ask) / 2 : basePrice;
+        const midReal = realPrice ? (realPrice.bid + realPrice.ask) / 2 : last.close;
         last.close = midReal;
-        // Keep some wick to show it was a real candle
         last.high = Math.max(last.high, midReal);
         last.low = Math.min(last.low, midReal);
-        // Ensure last candle time is aligned to timeframe
-        last.time = Math.floor(last.time / timeframeSeconds) * timeframeSeconds;
+      } else {
+        // Generate initial historical data ending at current real price
+        data = generatePriceData(basePrice, 100);
+        if (data.length > 0) {
+          const last = data[data.length - 1];
+          const midReal = realPrice ? (realPrice.bid + realPrice.ask) / 2 : basePrice;
+          last.close = midReal;
+          last.high = Math.max(last.high, midReal);
+          last.low = Math.min(last.low, midReal);
+          last.time = Math.floor(last.time / timeframeSeconds) * timeframeSeconds;
+        }
       }
+      
       candleSeries.setData(data as any);
       
       // Init lastPriceRef from last historical candle
@@ -462,44 +492,56 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
     
     const midPrice = (priceInfo.bid + priceInfo.ask) / 2;
     const now = Math.floor(Date.now() / 1000);
-    // Round current time down to the active timeframe boundary
     const candleTime = Math.floor(now / timeframeSeconds) * timeframeSeconds;
+    const historyKey = `${symbol}-${selectedTimeframe}`;
     
     try {
       const last = lastPriceRef.current;
+      let newCandle;
       
       if (last && last.time === candleTime) {
         // Same candle - update OHLC
-        candleSeriesRef.current.update({
-          time: candleTime as any,
+        newCandle = {
+          time: candleTime,
           open: last.openPrice,
           high: Math.max(last.highPrice, midPrice),
           low: Math.min(last.lowPrice, midPrice),
           close: midPrice,
-        });
+        };
         lastPriceRef.current = {
           ...last,
           price: midPrice,
-          highPrice: Math.max(last.highPrice, midPrice),
-          lowPrice: Math.min(last.lowPrice, midPrice),
+          highPrice: newCandle.high,
+          lowPrice: newCandle.low,
         };
       } else {
         // New candle
-        candleSeriesRef.current.update({
-          time: candleTime as any,
+        newCandle = {
+          time: candleTime,
           open: last ? last.price : midPrice,
           high: midPrice,
           low: midPrice,
           close: midPrice,
-        });
+        };
         lastPriceRef.current = {
           price: midPrice,
           time: candleTime,
-          openPrice: last ? last.price : midPrice,
-          highPrice: midPrice,
-          lowPrice: midPrice,
+          openPrice: newCandle.open,
+          highPrice: newCandle.high,
+          lowPrice: newCandle.low,
         };
       }
+      
+      candleSeriesRef.current.update(newCandle as any);
+      
+      // Persist to history - keep last 200 candles
+      setCandleHistory(prev => {
+        const existing = prev[historyKey] || [];
+        const filtered = existing.filter(c => c.time < candleTime);
+        const updated = [...filtered, newCandle];
+        if (updated.length > 200) updated.shift();
+        return { ...prev, [historyKey]: updated };
+      });
       
       // Keep chart scrolled to right
       chartRef.current?.timeScale()?.scrollToRealTime();
