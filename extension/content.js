@@ -134,18 +134,41 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 window.__weltradeExtLoaded = true;
 console.log('[Weltrade] Content script loaded at', new Date().toISOString());
 
-// Auto-start with retry
-function tryStart() {
-  if (document.body) {
+// Wait for chart/symbol elements to appear (Weltrade has login flow)
+function waitForChart() {
+  const observer = new MutationObserver((mutations, obs) => {
+    // Check if we have price-like elements or SFX symbols
+    const bodyText = document.body?.textContent || '';
+    const hasSFX = bodyText.includes('SFX Vol') || bodyText.includes('FXVOL');
+    const hasNumbers = /\d+\.\d{2,}/.test(bodyText);
+    
+    if (hasSFX || hasNumbers) {
+      console.log('[Weltrade] Chart/symbols detected, starting extraction...');
+      obs.disconnect();
+      startExtraction();
+    }
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true
+  });
+  
+  // Timeout after 30s - start anyway
+  setTimeout(() => {
+    observer.disconnect();
+    console.log('[Weltrade] Timeout, starting extraction anyway...');
     startExtraction();
-  } else {
-    setTimeout(tryStart, 500);
-  }
+  }, 30000);
 }
 
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-  tryStart();
+// Also try to start immediately if page already loaded
+if (document.readyState === 'complete') {
+  setTimeout(startExtraction, 2000);
 } else {
-  window.addEventListener('DOMContentLoaded', tryStart);
-  window.addEventListener('load', tryStart);
+  window.addEventListener('load', () => setTimeout(startExtraction, 2000));
 }
+
+// Start watching for chart
+waitForChart();
