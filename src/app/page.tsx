@@ -323,8 +323,18 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
   const chartRef = useRef<any>(null);
   const candleSeriesRef = useRef<any>(null);
   const volumeSeriesRef = useRef<any>(null);
-  const lastPriceRef = useRef<{ price: number; time: number } | null>(null);
+  const lastPriceRef = useRef<{ price: number; time: number; openPrice: number; highPrice: number; lowPrice: number } | null>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState("M5");
+
+  // Convert timeframe to seconds
+  const timeframeSeconds = {
+    M1: 60,
+    M5: 300,
+    M15: 900,
+    M30: 1800,
+    H1: 3600,
+    H4: 14400,
+  }[selectedTimeframe] || 300;
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -431,7 +441,7 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
     };
   }, [symbol, selectedTimeframe]);
 
-  // Live price update - uses a fast tick series that updates frequently
+  // Live price update - updates current candle based on selected timeframe
   useEffect(() => {
     if (!candleSeriesRef.current || !realPrices) return;
     
@@ -440,35 +450,48 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
     
     const midPrice = (priceInfo.bid + priceInfo.ask) / 2;
     const now = Math.floor(Date.now() / 1000);
+    // Round current time down to the active timeframe boundary
+    const candleTime = Math.floor(now / timeframeSeconds) * timeframeSeconds;
     
     try {
       const last = lastPriceRef.current;
       
-      if (last && last.time === now) {
-        // Same second - update current candle
+      if (last && last.time === candleTime) {
+        // Same candle - update OHLC
         candleSeriesRef.current.update({
-          time: now as any,
-          open: last.price,
-          high: Math.max(last.price, midPrice),
-          low: Math.min(last.price, midPrice),
+          time: candleTime as any,
+          open: last.openPrice,
+          high: Math.max(last.highPrice, midPrice),
+          low: Math.min(last.lowPrice, midPrice),
           close: midPrice,
         });
+        lastPriceRef.current = {
+          ...last,
+          price: midPrice,
+          highPrice: Math.max(last.highPrice, midPrice),
+          lowPrice: Math.min(last.lowPrice, midPrice),
+        };
       } else {
-        // New second - add new candle starting from last close
+        // New candle
         candleSeriesRef.current.update({
-          time: now as any,
+          time: candleTime as any,
           open: last ? last.price : midPrice,
           high: midPrice,
           low: midPrice,
           close: midPrice,
         });
+        lastPriceRef.current = {
+          price: midPrice,
+          time: candleTime,
+          openPrice: last ? last.price : midPrice,
+          highPrice: midPrice,
+          lowPrice: midPrice,
+        };
       }
-      
-      lastPriceRef.current = { price: midPrice, time: now };
     } catch (e) {
       // Ignore update errors
     }
-  }, [realPrices, symbol]);
+  }, [realPrices, symbol, timeframeSeconds]);
 
   return (
     <div className="bg-dark-200 rounded-lg overflow-hidden">
