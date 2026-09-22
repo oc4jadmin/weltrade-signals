@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Weltrade Price Extractor",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Extract FX Vol prices from Weltrade Web Terminal",
   "permissions": ["activeTab", "storage"],
   "host_permissions": ["*://secure.weltrade.com/*"],

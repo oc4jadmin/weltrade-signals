@@ -153,7 +153,32 @@ async function loadSavedUrl() {
 }
 
 // Event listeners
-connectBtn.addEventListener('click', toggleExtraction);
+// Inject button instead of toggle
+connectBtn.addEventListener('click', async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) return;
+    
+    if (!tab.url?.includes('weltrade')) {
+      scanResult.textContent = 'Not on Weltrade page';
+      return;
+    }
+    
+    connectBtn.textContent = 'Injecting...';
+    chrome.runtime.sendMessage({ type: 'INJECT_SCRIPT' }, (response) => {
+      if (response?.injected) {
+        connectBtn.textContent = 'Injected ✓';
+        scanResult.textContent = 'Script injected. Re-scan in 3s...';
+        setTimeout(() => scanBtn.click(), 3000);
+      } else {
+        connectBtn.textContent = 'Inject Failed ✗';
+        scanResult.textContent = 'Injection failed. Try refreshing the page.';
+      }
+    });
+  } catch (e) {
+    scanResult.textContent = 'Error: ' + e.message;
+  }
+});
 dashboardUrlInput.addEventListener('change', saveDashboardUrl);
 dashboardUrlInput.addEventListener('blur', saveDashboardUrl);
 
