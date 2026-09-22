@@ -366,6 +366,7 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
           timeVisible: true,
           rightOffset: 12,
           barSpacing: 8,
+          fixLeftEdge: false,
         },
         handleScroll: {
           mouseWheel: true,
@@ -373,7 +374,6 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
           horzTouchDrag: true,
           vertTouchDrag: true,
         },
-        fixLeftEdge: false,
         handleScale: {
           axisPressedMouseMove: true,
           mouseWheel: true,
