@@ -279,6 +279,7 @@ const Sidebar = ({
   pricesCount,
   userRole,
   onLogout,
+  onAdminLogin,
 }: {
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -287,6 +288,7 @@ const Sidebar = ({
   pricesCount: number;
   userRole: "admin" | "user";
   onLogout: () => void;
+  onAdminLogin: () => void;
 }) => {
   const allMenuItems = [
     { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -367,13 +369,22 @@ const Sidebar = ({
             </div>
           </div>
           
-          {/* Logout Button */}
-          <button
-            onClick={onLogout}
-            className="w-full mt-4 bg-danger/20 hover:bg-danger/30 text-danger text-sm py-2 rounded-lg transition-colors"
-          >
-            Logout ({userRole})
-          </button>
+          {/* Admin Login/Logout Button */}
+          {userRole === "admin" ? (
+            <button
+              onClick={onLogout}
+              className="w-full mt-4 bg-danger/20 hover:bg-danger/30 text-danger text-sm py-2 rounded-lg transition-colors"
+            >
+              Logout (Admin)
+            </button>
+          ) : (
+            <button
+              onClick={onAdminLogin}
+              className="w-full mt-4 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 text-sm py-2 rounded-lg transition-colors"
+            >
+              Admin Login
+            </button>
+          )}
         </div>
         
         {/* Extension Install Guide */}
@@ -1315,42 +1326,36 @@ export default function Dashboard() {
     connected: true,
   });
   
-  // Login state
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userRole, setUserRole] = useState<"admin" | "user" | null>(null);
+  // Login state - default to user mode, admin needs login
+  const [userRole, setUserRole] = useState<"admin" | "user">("user");
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [loginError, setLoginError] = useState("");
   
   // Check existing login on mount
+  // Check existing admin login on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedRole = localStorage.getItem('weltrade_user_role');
-      if (savedRole === 'admin' || savedRole === 'user') {
-        setUserRole(savedRole);
-        setIsLoggedIn(true);
+      if (savedRole === 'admin') {
+        setUserRole('admin');
       }
     }
   }, []);
   
-  const handleLogin = () => {
+  const handleAdminLogin = () => {
     if (loginForm.username === "admin" && loginForm.password === "Admin@2026") {
       setUserRole("admin");
-      setIsLoggedIn(true);
+      setShowAdminLogin(false);
       localStorage.setItem('weltrade_user_role', 'admin');
       setLoginError("");
-    } else if (loginForm.username === "user" && loginForm.password === "User@2026") {
-      setUserRole("user");
-      setIsLoggedIn(true);
-      localStorage.setItem('weltrade_user_role', 'user');
-      setLoginError("");
     } else {
-      setLoginError("Invalid username or password");
+      setLoginError("Invalid admin credentials");
     }
   };
   
   const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserRole(null);
+    setUserRole("user");
     localStorage.removeItem('weltrade_user_role');
   };
   
@@ -1530,67 +1535,68 @@ export default function Dashboard() {
 
   const activeSignalsCount = signals.filter((s) => s.status === "ACTIVE").length;
 
-  // Login Screen
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-dark-400 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-dark-300 rounded-2xl p-8 border border-slate-700/50">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
-              <Zap className="w-8 h-8 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-white">TheKillers Signals</h1>
-            <p className="text-slate-400 mt-2">Synthetic Indices Trading Dashboard</p>
-          </div>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm text-slate-400 block mb-2">Username</label>
-              <input
-                type="text"
-                value={loginForm.username}
-                onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
-                className="w-full bg-dark-200 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500"
-                placeholder="admin or user"
-              />
-            </div>
-            
-            <div>
-              <label className="text-sm text-slate-400 block mb-2">Password</label>
-              <input
-                type="password"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-                className="w-full bg-dark-200 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500"
-                placeholder="Enter password"
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-              />
-            </div>
-            
-            {loginError && (
-              <div className="bg-danger/20 border border-danger/50 rounded-lg px-4 py-3 text-danger text-sm">
-                {loginError}
+  return (
+    <div className="flex h-screen bg-dark-400">
+      {/* Admin Login Modal */}
+      {showAdminLogin && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-md bg-dark-300 rounded-2xl p-8 border border-slate-700/50">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
+                <Zap className="w-8 h-8 text-white" />
               </div>
-            )}
+              <h1 className="text-2xl font-bold text-white">Admin Login</h1>
+              <p className="text-slate-400 mt-2">Enter credentials to access admin settings</p>
+            </div>
             
-            <button
-              onClick={handleLogin}
-              className="w-full bg-gradient-to-r from-primary-500 to-primary-700 text-white font-semibold py-3 rounded-lg hover:opacity-90 transition-opacity"
-            >
-              Sign In
-            </button>
-            
-            <div className="text-center text-sm text-slate-500 mt-6">
-              <p>Authorized access only</p>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-slate-400 block mb-2">Username</label>
+                <input
+                  type="text"
+                  value={loginForm.username}
+                  onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
+                  className="w-full bg-dark-200 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+                  placeholder="admin"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm text-slate-400 block mb-2">Password</label>
+                <input
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                  className="w-full bg-dark-200 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+                  placeholder="Enter password"
+                  onKeyPress={(e) => e.key === 'Enter' && handleAdminLogin()}
+                />
+              </div>
+              
+              {loginError && (
+                <div className="bg-danger/20 border border-danger/50 rounded-lg px-4 py-3 text-danger text-sm">
+                  {loginError}
+                </div>
+              )}
+              
+              <button
+                onClick={handleAdminLogin}
+                className="w-full bg-gradient-to-r from-primary-500 to-primary-700 text-white font-semibold py-3 rounded-lg hover:opacity-90 transition-opacity"
+              >
+                Login as Admin
+              </button>
+              
+              <button
+                onClick={() => setShowAdminLogin(false)}
+                className="w-full bg-dark-200 text-slate-400 text-sm py-3 rounded-lg hover:bg-dark-100 transition-colors"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
-      </div>
-    );
-  }
+      )}
 
-  return (
-    <div className="flex h-screen bg-dark-400">
       {/* Sidebar */}
       <Sidebar
         activeTab={activeTab}
@@ -1598,8 +1604,9 @@ export default function Dashboard() {
         unreadCount={activeSignalsCount}
         extensionConnected={extensionConnected}
         pricesCount={Object.keys(realPrices).length}
-        userRole={userRole || "user"}
+        userRole={userRole}
         onLogout={handleLogout}
+        onAdminLogin={() => setShowAdminLogin(true)}
       />
 
       {/* Main Content */}
