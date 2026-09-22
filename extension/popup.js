@@ -153,7 +153,7 @@ async function loadSavedUrl() {
 }
 
 // Event listeners
-// Inject button instead of toggle
+// Inject button - direct injection from popup
 connectBtn.addEventListener('click', async () => {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -165,16 +165,28 @@ connectBtn.addEventListener('click', async () => {
     }
     
     connectBtn.textContent = 'Injecting...';
-    chrome.runtime.sendMessage({ type: 'INJECT_SCRIPT' }, (response) => {
-      if (response?.injected) {
-        connectBtn.textContent = 'Injected ✓';
-        scanResult.textContent = 'Script injected. Re-scan in 3s...';
-        setTimeout(() => scanBtn.click(), 3000);
-      } else {
-        connectBtn.textContent = 'Inject Failed ✗';
-        scanResult.textContent = 'Injection failed. Try refreshing the page.';
-      }
-    });
+    scanResult.textContent = 'Injecting script directly...';
+    
+    // Direct injection from popup using chrome.scripting
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js']
+      });
+      
+      connectBtn.textContent = 'Injected ✓';
+      scanResult.textContent = 'Script injected! Waiting 3s for extraction...';
+      
+      // Wait then scan
+      setTimeout(() => {
+        scanBtn.click();
+      }, 3000);
+      
+    } catch (err) {
+      console.error('Injection error:', err);
+      connectBtn.textContent = 'Inject Failed ✗';
+      scanResult.textContent = 'Error: ' + err.message;
+    }
   } catch (e) {
     scanResult.textContent = 'Error: ' + e.message;
   }
