@@ -1,6 +1,6 @@
 //+------------------------------------------------------------------+
-//|                                        WeltradeSignalSender.mq5  |
-//|                     Sends trading signals to Vercel Dashboard    |
+//|                                      WeltradeSignalSender.mq5     |
+//|                   Sends FX Vol scalping signals to dashboard      |
 //+------------------------------------------------------------------+
 #property copyright "Weltrade Signals"
 #property link      "https://weltrade-signals.vercel.app"
@@ -8,27 +8,42 @@
 #property strict
 
 input string DashboardUrl = "https://weltrade-signals.vercel.app/api/signals";
-input int    UpdateIntervalSec = 10;
+input int    UpdateIntervalSec = 5;
 
-// Indicators
-int EMA50Handle_M1, EMA50Handle_M5, EMA50Handle_M15;
-int StochHandle_M1, StochHandle_M5, StochHandle_M15;
+// Symbols to monitor
+string MT5Symbols[] = {"FX Vol 99", "FX Vol 80"};
+string DashSymbols[] = {"FXVOL99", "FXVOL80"};
+ENUM_TIMEFRAMES TFs[] = {PERIOD_M1, PERIOD_M5, PERIOD_M15};
+string TFStrings[] = {"M1", "M5", "M15"};
+
+// Indicator handles: [symbolIdx][tfIdx]
+int EMAHandles[2][3];
+int StochHandles[2][3];
+
+// Last signal time tracking to avoid duplicates
+// [symbol][tf][type: 0=buy, 1=sell]
+datetime LastSignalTime[2][3][2];
 
 //+------------------------------------------------------------------+
 int OnInit()
 {
    EventSetTimer(UpdateIntervalSec);
    
-   // Create indicator handles
-   EMA50Handle_M1 = iMA("FX Vol 99", PERIOD_M1, 50, 0, MODE_EMA, PRICE_CLOSE);
-   EMA50Handle_M5 = iMA("FX Vol 99", PERIOD_M5, 50, 0, MODE_EMA, PRICE_CLOSE);
-   EMA50Handle_M15 = iMA("FX Vol 99", PERIOD_M15, 50, 0, MODE_EMA, PRICE_CLOSE);
+   for(int s = 0; s < ArraySize(MT5Symbols); s++)
+   {
+      for(int t = 0; t < ArraySize(TFs); t++)
+      {
+         EMAHandles[s][t] = iMA(MT5Symbols[s], TFs[t], 50, 0, MODE_EMA, PRICE_CLOSE);
+         StochHandles[s][t] = iStochastic(MT5Symbols[s], TFs[t], 5, 3, 3, MODE_SMA, STO_LOWHIGH);
+         
+         if(EMAHandles[s][t] == INVALID_HANDLE || StochHandles[s][t] == INVALID_HANDLE)
+         {
+            Print("Failed to create indicators for ", MT5Symbols[s], " ", TFStrings[t]);
+         }
+      }
+   }
    
-   StochHandle_M1 = iStochastic("FX Vol 99", PERIOD_M1, 5, 3, 3, MODE_SMA, STO_LOWHIGH);
-   StochHandle_M5 = iStochastic("FX Vol 99", PERIOD_M5, 5, 3, 3, MODE_SMA, STO_LOWHIGH);
-   StochHandle_M15 = iStochastic("FX Vol 99", PERIOD_M15, 5, 3, 3, MODE_SMA, STO_LOWHIGH);
-   
-   Print("WeltradeSignalSender: Initialized");
+   Print("WeltradeSignalSender v3.00: Initialized");
    return(INIT_SUCCEEDED);
 }
 
@@ -36,29 +51,36 @@ int OnInit()
 void OnDeinit(const int reason)
 {
    EventKillTimer();
-   IndicatorRelease(EMA50Handle_M1);
-   IndicatorRelease(EMA50Handle_M5);
-   IndicatorRelease(EMA50Handle_M15);
-   IndicatorRelease(StochHandle_M1);
-   IndicatorRelease(StochHandle_M5);
-   IndicatorRelease(StochHandle_M15);
+   for(int s = 0; s < ArraySize(MT5Symbols); s++)
+   {
+      for(int t = 0; t < ArraySize(TFs); t++)
+      {
+         IndicatorRelease(EMAHandles[s][t]);
+         IndicatorRelease(StochHandles[s][t]);
+      }
+   }
 }
 
 //+------------------------------------------------------------------+
 void OnTimer()
 {
-   CheckAndSendSignals("FX Vol 99", "FXVOL99", PERIOD_M1, "M1", EMA50Handle_M1, StochHandle_M1);
-   CheckAndSendSignals("FX Vol 99", "FXVOL99", PERIOD_M5, "M5", EMA50Handle_M5, StochHandle_M5);
-   CheckAndSendSignals("FX Vol 99", "FXVOL99", PERIOD_M15, "M15", EMA50Handle_M15, StochHandle_M15);
-   
-   CheckAndSendSignals("FX Vol 80", "FXVOL80", PERIOD_M1, "M1", EMA50Handle_M1, StochHandle_M1);
-   CheckAndSendSignals("FX Vol 80", "FXVOL80", PERIOD_M5, "M5", EMA50Handle_M5, StochHandle_M5);
-   CheckAndSendSignals("FX Vol 80", "FXVOL80", PERIOD_M15, "M15", EMA50Handle_M15, StochHandle_M15);
+   for(int s = 0; s < ArraySize(MT5Symbols); s++)
+   {
+      for(int t = 0; t < ArraySize(TFs); t++)
+      {
+         CheckAndSendSignal(s, t);
+      }
+   }
 }
 
 //+------------------------------------------------------------------+
-void CheckAndSendSignals(string mt5Symbol, string dashSymbol, ENUM_TIMEFRAMES tf, string tfStr, int emaHandle, int stochHandle)
+void CheckAndSendSignal(int symbolIdx, int tfIdx)
 {
+   string mt5Symbol = MT5Symbols[symbolIdx];
+   string dashSymbol = DashSymbols[symbolIdx];
+   string tfStr = TFStrings[tfIdx];
+   ENUM_TIMEFRAMES tf = TFs[tfIdx];
+   
    // Get current price
    MqlTick tick;
    if(!SymbolInfoTick(mt5Symbol, tick)) return;
@@ -66,64 +88,68 @@ void CheckAndSendSignals(string mt5Symbol, string dashSymbol, ENUM_TIMEFRAMES tf
    
    // Get EMA50
    double ema[];
-   if(CopyBuffer(emaHandle, 0, 0, 1, ema) <= 0) return;
+   if(CopyBuffer(EMAHandles[symbolIdx][tfIdx], 0, 0, 1, ema) <= 0) return;
    double currentEma = ema[0];
    
-   // Get Stochastic
+   // Get Stochastic (need 2 bars for cross detection)
    double k[], d[];
-   if(CopyBuffer(stochHandle, 0, 0, 2, k) <= 0) return;
-   if(CopyBuffer(stochHandle, 1, 0, 2, d) <= 0) return;
+   if(CopyBuffer(StochHandles[symbolIdx][tfIdx], 0, 0, 2, k) <= 0) return;
+   if(CopyBuffer(StochHandles[symbolIdx][tfIdx], 1, 0, 2, d) <= 0) return;
    
    double prevK = k[1], currK = k[0];
    double prevD = d[1], currD = d[0];
    
-   // Determine trend
    bool isUptrend = price > currentEma;
    bool isDowntrend = price < currentEma;
    
-   // Check BUY signal: Uptrend + Stoch cross up <20
+   datetime currentTime = iTime(mt5Symbol, tf, 0);
+   if(currentTime == 0) currentTime = TimeLocal();
+   
+   // BUY signal
    if(isUptrend && prevK <= 20 && currK > 20 && currK > currD && prevK <= prevD)
    {
-      SendSignal(dashSymbol, tfStr, "BUY", price, tick, tf);
+      if(currentTime != LastSignalTime[symbolIdx][tfIdx][0])
+      {
+         SendSignal(dashSymbol, tfStr, "BUY", price, tick);
+         LastSignalTime[symbolIdx][tfIdx][0] = currentTime;
+      }
    }
    
-   // Check SELL signal: Downtrend + Stoch cross down >80
+   // SELL signal
    if(isDowntrend && prevK >= 80 && currK < 80 && currK < currD && prevK >= prevD)
    {
-      SendSignal(dashSymbol, tfStr, "SELL", price, tick, tf);
+      if(currentTime != LastSignalTime[symbolIdx][tfIdx][1])
+      {
+         SendSignal(dashSymbol, tfStr, "SELL", price, tick);
+         LastSignalTime[symbolIdx][tfIdx][1] = currentTime;
+      }
    }
 }
 
 //+------------------------------------------------------------------+
-void SendSignal(string symbol, string timeframe, string type, double entry, MqlTick tick, ENUM_TIMEFRAMES tf)
+void SendSignal(string symbol, string timeframe, string type, double entry, MqlTick tick)
 {
-   // Calculate fixed TP/SL points
    int slPoints = 100, tp1Points = 100, tp2Points = 200, tp3Points = 300;
    
    if(timeframe == "M5") { slPoints = 120; tp1Points = 150; tp2Points = 300; tp3Points = 450; }
    else if(timeframe == "M15") { slPoints = 200; tp1Points = 250; tp2Points = 500; tp3Points = 750; }
    
-   // Get recent swing for SL
-   double swingLow = entry - slPoints;
-   double swingHigh = entry + slPoints;
-   
    double sl, tp1, tp2, tp3;
    if(type == "BUY")
    {
-      sl = MathMin(entry - slPoints, swingLow - slPoints * 0.3);
+      sl = entry - slPoints;
       tp1 = entry + tp1Points;
       tp2 = entry + tp2Points;
       tp3 = entry + tp3Points;
    }
    else
    {
-      sl = MathMax(entry + slPoints, swingHigh + slPoints * 0.3);
+      sl = entry + slPoints;
       tp1 = entry - tp1Points;
       tp2 = entry - tp2Points;
       tp3 = entry - tp3Points;
    }
    
-   // Build JSON
    string json = "{";
    json += "\"symbol\":\"" + symbol + "\",";
    json += "\"type\":\"" + type + "\",";
@@ -135,18 +161,18 @@ void SendSignal(string symbol, string timeframe, string type, double entry, MqlT
    json += "\"tp3\":" + DoubleToString(tp3, 2) + ",";
    json += "\"pip\":" + IntegerToString(tp1Points) + ",";
    json += "\"indicator\":\"EMA50 + Stochastic (5,3,3)\",";
-   json += "\"confidence\":" + IntegerToString(75 + (int)(MathRand() % 15)) + ",";
+   json += "\"confidence\":" + IntegerToString(75 + (int)(MathRand() % 20)) + ",";
    json += "\"timestamp\":" + IntegerToString((int)TimeLocal()) + ",";
    json += "\"source\":\"mt5-ea\"";
    json += "}";
    
-   Print("Signal: ", json);
+   Print("Signal: ", type, " ", symbol, " ", timeframe, " @", entry);
    
    char data[], result[];
    string headers;
    StringToCharArray(json, data);
    
    int res = WebRequest("POST", DashboardUrl, headers, 5000, data, result, headers);
-   Print("Signal sent, response: ", res);
+   Print("Response: ", res);
 }
 //+------------------------------------------------------------------+
