@@ -158,6 +158,13 @@ function calculateATR(highs: number[], lows: number[], closes: number[], period:
   return sma(tr, period);
 }
 
+// Fixed point targets for 0.01 lot (~$1-3 per TP)
+const TP_SL_POINTS = {
+  M1: { sl: 80, tp1: 100, tp2: 200, tp3: 300 },
+  M5: { sl: 120, tp1: 150, tp2: 300, tp3: 450 },
+  M15: { sl: 200, tp1: 250, tp2: 500, tp3: 750 },
+};
+
 // Generate scalping signals based on EMA50 + Stochastic (5,3,3)
 function generateScalpingSignals(
   candles: Array<{ time: number; open: number; high: number; low: number; close: number }>,
@@ -173,7 +180,6 @@ function generateScalpingSignals(
 
   const ema50 = calculateEMA(closes, 50);
   const stoch = calculateStochastic(highs, lows, closes, 5, 3, 3);
-  const atr = calculateATR(highs, lows, closes, 14);
 
   const lastIdx = candles.length - 1;
   const prevIdx = lastIdx - 1;
@@ -184,7 +190,8 @@ function generateScalpingSignals(
   const currK = stoch.k[lastIdx];
   const prevD = stoch.d[prevIdx];
   const currD = stoch.d[lastIdx];
-  const currentATR = atr[lastIdx];
+
+  const points = TP_SL_POINTS[timeframe as keyof typeof TP_SL_POINTS] || TP_SL_POINTS.M5;
 
   // Determine trend with EMA50
   const isUptrend = price > ema;
@@ -193,7 +200,7 @@ function generateScalpingSignals(
   // BUY: Uptrend + Stochastic cross up below 20
   if (isUptrend && prevK <= 20 && currK > 20 && currK > currD && prevK <= prevD) {
     const swingLow = Math.min(...lows.slice(lastIdx - 10, lastIdx + 1));
-    const sl = Math.min(swingLow - currentATR * 0.5, price - currentATR * 1.5);
+    const sl = Math.min(price - points.sl, swingLow - points.sl * 0.3);
     signals.push({
       id: `scalp-buy-${symbol}-${timeframe}-${candles[lastIdx].time}`,
       symbol,
@@ -201,10 +208,10 @@ function generateScalpingSignals(
       timeframe,
       entry: Number(price.toFixed(2)),
       sl: Number(sl.toFixed(2)),
-      tp1: Number((price + currentATR * 1).toFixed(2)),
-      tp2: Number((price + currentATR * 2).toFixed(2)),
-      tp3: Number((price + currentATR * 3).toFixed(2)),
-      pip: Number((currentATR * 1).toFixed(1)),
+      tp1: Number((price + points.tp1).toFixed(2)),
+      tp2: Number((price + points.tp2).toFixed(2)),
+      tp3: Number((price + points.tp3).toFixed(2)),
+      pip: points.tp1,
       timestamp: new Date(candles[lastIdx].time * 1000),
       status: "ACTIVE",
       indicator: "EMA50 + Stochastic (5,3,3)",
@@ -215,7 +222,7 @@ function generateScalpingSignals(
   // SELL: Downtrend + Stochastic cross down above 80
   if (isDowntrend && prevK >= 80 && currK < 80 && currK < currD && prevK >= prevD) {
     const swingHigh = Math.max(...highs.slice(lastIdx - 10, lastIdx + 1));
-    const sl = Math.max(swingHigh + currentATR * 0.5, price + currentATR * 1.5);
+    const sl = Math.max(price + points.sl, swingHigh + points.sl * 0.3);
     signals.push({
       id: `scalp-sell-${symbol}-${timeframe}-${candles[lastIdx].time}`,
       symbol,
@@ -223,10 +230,10 @@ function generateScalpingSignals(
       timeframe,
       entry: Number(price.toFixed(2)),
       sl: Number(sl.toFixed(2)),
-      tp1: Number((price - currentATR * 1).toFixed(2)),
-      tp2: Number((price - currentATR * 2).toFixed(2)),
-      tp3: Number((price - currentATR * 3).toFixed(2)),
-      pip: Number((currentATR * 1).toFixed(1)),
+      tp1: Number((price - points.tp1).toFixed(2)),
+      tp2: Number((price - points.tp2).toFixed(2)),
+      tp3: Number((price - points.tp3).toFixed(2)),
+      pip: points.tp1,
       timestamp: new Date(candles[lastIdx].time * 1000),
       status: "ACTIVE",
       indicator: "EMA50 + Stochastic (5,3,3)",
