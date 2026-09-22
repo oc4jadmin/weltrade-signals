@@ -1,7 +1,6 @@
-// Weltrade Price Extractor - Content Script
+// Weltrade Price Extractor v1.4
 // Extracts real-time FX Vol prices from Weltrade Web Terminal
 
-// Weltrade symbol format: "SFX Vol 99", "SFX Vol 80", "SFX Vol 60", "SFX Vol 40", "SFX Vol 20"
 const SYMBOLS = [
   { display: 'SFX Vol 99', code: 'FXVOL99' },
   { display: 'SFX Vol 80', code: 'FXVOL80' },
@@ -11,22 +10,20 @@ const SYMBOLS = [
 ];
 
 let extractionInterval = null;
-let extractionCount = 0;
-let debugLog = [];
 
-// Extract price by walking text nodes
+// Simple extraction - scan all text nodes for symbols and nearby numbers
 function extractPrices() {
-  const prices = [];
-  const found = {};
-
-  // Use TreeWalker to visit all text nodes
+  const results = [];
+  const seen = new Set();
+  
+  // Get all text nodes in document
   const walker = document.createTreeWalker(
     document.body,
     NodeFilter.SHOW_TEXT,
     null,
     false
   );
-
+  
   const textNodes = [];
   let node;
   while (node = walker.nextNode()) {
@@ -35,31 +32,32 @@ function extractPrices() {
       textNodes.push({ node, text: text.trim() });
     }
   }
-
-  // For each text node, check if it contains a symbol
-  textNodes.forEach(({ node, text }) => {
+  
+  // For each text node, check for symbol match
+  for (const { node, text } of textNodes) {
     for (const sym of SYMBOLS) {
-      if (text.includes(sym.display) && !found[sym.code]) {
-        // Walk up to find a container with price numbers
+      if (text.includes(sym.display) && !seen.has(sym.code)) {
+        // Found symbol - look for price numbers in parent elements
         let scope = node.parentElement;
         let depth = 0;
-        while (scope && depth < 10) {
+        
+        while (scope && depth < 8) {
           const scopeText = scope.textContent || '';
-          // Match decimals - prices typically have 2-5 decimals
           const numbers = scopeText.match(/\b\d{1,10}\.\d{2,5}\b/g);
+          
           if (numbers && numbers.length >= 2) {
-            const validNumbers = numbers
+            const nums = numbers
               .map(n => parseFloat(n))
               .filter(n => n > 0.01 && n < 10000000);
-            if (validNumbers.length >= 2) {
-              found[sym.code] = {
+            
+            if (nums.length >= 2) {
+              results.push({
                 symbol: sym.code,
-                bid: validNumbers[0],
-                ask: validNumbers[1],
+                bid: nums[0],
+                ask: nums[1],
                 timestamp: Date.now()
-              };
-              debugLog.push(`${sym.display} → bid:${validNumbers[0]} ask:${validNumbers[1]}`);
-              if (debugLog.length > 20) debugLog.shift();
+              });
+              seen.add(sym.code);
             }
             break;
           }
@@ -68,123 +66,76 @@ function extractPrices() {
         }
       }
     }
-  });
-
-  extractionCount++;
-  Object.values(found).forEach(p => prices.push(p));
-  
-  if (extractionCount % 10 === 0) {
-    console.log(`[Weltrade Extractor] Scan #${extractionCount}: found ${prices.length} symbols`, debugLog.slice(-5));
   }
   
-  return prices;
+  return results;
 }
 
-// Send prices to background script
+// Send prices to background
 function sendPrices() {
   const prices = extractPrices();
   
-  // Always send heartbeat even if no prices, to keep connection alive
-  const message = {
-    type: 'PRICES_UPDATE',
-    prices: prices,
-    timestamp: Date.now(),
-    active: true
-  };
-  
-  // Always send heartbeat so dashboard knows extension is alive
-  try {
-    if (chrome.runtime?.id) {
-      chrome.runtime.sendMessage(message, (response) => {
-        if (chrome.runtime.lastError) {
-          console.warn('[Weltrade Extractor] Send failed:', chrome.runtime.lastError.message);
-        }
-      });
-    }
-  } catch (e) {
-    console.warn('[Weltrade Extractor] Runtime error:', e.message);
+  if (chrome.runtime?.id) {
+    chrome.runtime.sendMessage({
+      type: 'PRICES_UPDATE',
+      prices: prices,
+      timestamp: Date.now()
+    }).catch(() => {});
   }
-  
-  if (prices.length > 0) {
-    try {
-      localStorage.setItem('weltrade_prices', JSON.stringify({
-        prices: prices,
-        updated: Date.now()
-      }));
-    } catch (e) {}
-    
-    // Debug: log first time we get prices
-    if (!window.__weltradeLogged) {
-      console.log('[Weltrade Extractor] First prices detected:', prices.length, 'symbols');
-      window.__weltradeLogged = true;
-    }
-  }
-}
-
-// Scan current page and return results (for manual debug)
-function scanNow() {
-  const prices = extractPrices();
-  const symbolsOnPage = [];
-  
-  // Also scan for any "SFX Vol" references
-  const bodyText = document.body.textContent || '';
-  SYMBOLS.forEach(sym => {
-    if (bodyText.includes(sym.display)) {
-      symbolsOnPage.push(sym.display);
-    }
-  });
-  
-  return {
-    prices: prices,
-    symbolsFound: symbolsOnPage,
-    debugLog: debugLog.slice(-10),
-    bodyTextLength: bodyText.length
-  };
 }
 
 // Start extraction
 function startExtraction() {
   if (extractionInterval) return;
   
-  console.log('[Weltrade Extractor] Starting...');
-  console.log('[Weltrade Extractor] Page URL:', window.location.href);
+  console.log('[Weltrade] Starting price extraction...');
   
-  // Initial scan to log what we see
+  // Log what we find
   setTimeout(() => {
-    const initial = scanNow();
-    console.log('[Weltrade Extractor] Initial scan:', initial);
+    const prices = extractPrices();
+    console.log('[Weltrade] Found', prices.length, 'symbols:', prices.map(p => `${p.symbol}=${p.bid}/${p.ask}`));
+    
+    // Also check what text contains "SFX"
+    const allText = document.body.textContent || '';
+    const sfxCount = (allText.match(/SFX Vol \d+/g) || []).length;
+    console.log('[Weltrade] SFX matches in page text:', sfxCount);
   }, 2000);
   
   sendPrices();
   extractionInterval = setInterval(sendPrices, 1000);
 }
 
-// Listen for messages from background/popup
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'START_EXTRACTION') {
+// Listen for messages
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'START_EXTRACTION') {
     startExtraction();
     sendResponse({ status: 'started' });
   }
-  if (message.type === 'STOP_EXTRACTION') {
+  if (msg.type === 'STOP_EXTRACTION') {
     if (extractionInterval) {
       clearInterval(extractionInterval);
       extractionInterval = null;
     }
     sendResponse({ status: 'stopped' });
   }
-  if (message.type === 'GET_PRICES') {
-    sendResponse({ prices: extractPrices() });
-  }
-  if (message.type === 'SCAN_NOW') {
-    sendResponse(scanNow());
+  if (msg.type === 'SCAN_NOW') {
+    const prices = extractPrices();
+    const allText = document.body.textContent || '';
+    const sfxMatches = allText.match(/SFX Vol \d+/g) || [];
+    sendResponse({
+      prices: prices,
+      symbolsFound: sfxMatches,
+      bodyLength: allText.length
+    });
   }
 });
+
+// Mark as loaded for debugging
+window.__weltradeExtLoaded = true;
 
 // Auto-start
 if (document.readyState === 'complete') {
   startExtraction();
 } else {
-  window.addEventListener('load', () => {
-    setTimeout(startExtraction, 1000);
-  });
+  window.addEventListener('load', () => setTimeout(startExtraction, 1000));
 }
