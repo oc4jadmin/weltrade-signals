@@ -365,7 +365,8 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
           borderColor: "#334155",
           timeVisible: true,
           rightOffset: 12,
-          barSpacing: 6,
+          barSpacing: 8,
+          fixLeftEdge: true,
         },
         handleScroll: {
           mouseWheel: true,
@@ -411,7 +412,7 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
         last.low = Math.min(last.low, midReal);
       } else {
         // Generate initial historical data ending at current real price
-        data = generatePriceData(basePrice, 100);
+        data = generatePriceData(basePrice, 200);
         if (data.length > 0) {
           const last = data[data.length - 1];
           const midReal = realPrice ? (realPrice.bid + realPrice.ask) / 2 : basePrice;
@@ -454,6 +455,14 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
       );
 
       chart.timeScale().fitContent();
+      
+      // Limit zoom so candles don't get too huge when few candles
+      try {
+        chart.timeScale().applyOptions({
+          barSpacing: 8,
+          rightOffset: 12,
+        });
+      } catch (e) {}
 
       // Save refs for live updates
       chartRef.current = chart;
