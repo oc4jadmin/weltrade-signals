@@ -366,7 +366,6 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
           timeVisible: true,
           rightOffset: 12,
           barSpacing: 8,
-          fixLeftEdge: true,
         },
         handleScroll: {
           mouseWheel: true,
@@ -374,6 +373,7 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
           horzTouchDrag: true,
           vertTouchDrag: true,
         },
+        fixLeftEdge: false,
         handleScale: {
           axisPressedMouseMove: true,
           mouseWheel: true,
@@ -455,14 +455,6 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
       );
 
       chart.timeScale().fitContent();
-      
-      // Limit zoom so candles don't get too huge when few candles
-      try {
-        chart.timeScale().applyOptions({
-          barSpacing: 8,
-          rightOffset: 12,
-        });
-      } catch (e) {}
 
       // Save refs for live updates
       chartRef.current = chart;
@@ -552,8 +544,8 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
         return { ...prev, [historyKey]: updated };
       });
       
-      // Keep chart scrolled to right
-      chartRef.current?.timeScale()?.scrollToRealTime();
+      // Keep chart scrolled to right (only if user hasn't manually scrolled)
+      // chartRef.current?.timeScale()?.scrollToRealTime();
     } catch (e) {
       console.warn('[Chart] Update failed:', e);
     }
