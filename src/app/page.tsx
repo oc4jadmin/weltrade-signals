@@ -1352,19 +1352,31 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Generate signals when candle history updates
+  // Fetch signals from MT5 EA via API
   useEffect(() => {
-    if (Object.keys(candleHistory).length === 0) return;
-    
-    const newSignals = generateSignalsFromHistory(candleHistory);
-    setSignals(prev => {
-      // Keep old signals that are still active
-      const activeOld = prev.filter(s => s.status === "ACTIVE");
-      const activeIds = new Set(activeOld.map(s => s.id));
-      const filteredNew = newSignals.filter(s => !activeIds.has(s.id));
-      return [...activeOld, ...filteredNew].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    });
-  }, [candleHistory]);
+    const fetchSignals = async () => {
+      try {
+        const response = await fetch('/api/signals');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.signals && Array.isArray(data.signals)) {
+            setSignals(prev => {
+              // Merge with existing, keep latest 100
+              const merged = [...data.signals, ...prev];
+              const unique = Array.from(new Map(merged.map(s => [s.id, s])).values());
+              return unique.slice(0, 100).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to fetch signals');
+      }
+    };
+
+    fetchSignals();
+    const interval = setInterval(fetchSignals, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Persist candle history to localStorage whenever it changes
   useEffect(() => {
