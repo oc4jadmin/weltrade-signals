@@ -1,13 +1,14 @@
 //+------------------------------------------------------------------+
 //|                                      WeltradeSignalSender.mq5     |
-//|                   Sends FX Vol scalping signals to dashboard      |
+//|                   Sends FX Vol prices + signals to dashboard      |
 //+------------------------------------------------------------------+
 #property copyright "Weltrade Signals"
 #property link      "https://weltrade-signals.vercel.app"
-#property version   "3.00"
+#property version   "3.10"
 #property strict
 
-input string DashboardUrl = "https://weltrade-signals.vercel.app/api/signals";
+input string PricesUrl = "https://weltrade-signals.vercel.app/api/prices";
+input string SignalsUrl = "https://weltrade-signals.vercel.app/api/signals";
 input int    UpdateIntervalSec = 5;
 
 // Symbol names
@@ -68,6 +69,43 @@ int OnInit()
 }
 
 //+------------------------------------------------------------------+
+void SendPrices()
+{
+   string json = "{";
+   json += "\"prices\":[";
+   
+   bool first = true;
+   MqlTick tick99, tick80;
+   
+   if(SymbolInfoTick(SYMBOL_99_MT5, tick99))
+   {
+      if(!first) json += ",";
+      json += "{\"symbol\":\"FXVOL99\",\"bid\":" + DoubleToString(tick99.bid, 5) + ",\"ask\":" + DoubleToString(tick99.ask, 5) + "}";
+      first = false;
+   }
+   
+   if(SymbolInfoTick(SYMBOL_80_MT5, tick80))
+   {
+      if(!first) json += ",";
+      json += "{\"symbol\":\"FXVOL80\",\"bid\":" + DoubleToString(tick80.bid, 5) + ",\"ask\":" + DoubleToString(tick80.ask, 5) + "}";
+      first = false;
+   }
+   
+   json += "],\"source\":\"mt5-ea\",\"timestamp\":" + IntegerToString((int)TimeLocal()) + "}";
+   
+   char data[];
+   char result[];
+   string headers;
+   StringToCharArray(json, data);
+   
+   int res = WebRequest("POST", PricesUrl, headers, 5000, data, result, headers);
+   if(res != 200)
+   {
+      Print("SendPrices failed: ", res);
+   }
+}
+
+//+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
    EventKillTimer();
@@ -90,6 +128,10 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTimer()
 {
+   // Send prices first
+   SendPrices();
+   
+   // Then check signals
    static datetime lastLog = 0;
    if(TimeLocal() - lastLog > 60)
    {
@@ -230,7 +272,7 @@ void SendSignal(string symbol, string timeframe, string type, double entry)
    string headers;
    StringToCharArray(json, data);
    
-   int res = WebRequest("POST", DashboardUrl, headers, 5000, data, result, headers);
+   int res = WebRequest("POST", SignalsUrl, headers, 5000, data, result, headers);
    Print("Response: ", res);
 }
 //+------------------------------------------------------------------+
