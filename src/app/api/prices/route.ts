@@ -13,7 +13,18 @@ const LIVE_THRESHOLD_MS = 10000;
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const rawText = await request.text();
+    console.log('[API] Raw body length:', rawText.length, 'content:', rawText.substring(0, 300));
+    
+    // Try to extract JSON by finding first { and last }
+    const startIdx = rawText.indexOf('{');
+    const endIdx = rawText.lastIndexOf('}');
+    let jsonText = rawText;
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      jsonText = rawText.substring(startIdx, endIdx + 1);
+    }
+    
+    const body = JSON.parse(jsonText);
     const now = Date.now();
     
     if (body.prices && Array.isArray(body.prices)) {
