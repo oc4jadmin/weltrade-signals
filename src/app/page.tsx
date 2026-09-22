@@ -535,7 +535,7 @@ const ChartPanel = ({
         last.low = Math.min(last.low, midReal);
       } else {
         // Generate initial historical data ending at current real price
-        data = generatePriceData(basePrice, 200);
+        data = generatePriceData(basePrice, 100);
         if (data.length > 0) {
           const last = data[data.length - 1];
           const midReal = realPrice ? (realPrice.bid + realPrice.ask) / 2 : basePrice;
@@ -1306,7 +1306,10 @@ export default function Dashboard() {
       try {
         const saved = localStorage.getItem('weltrade_candle_history');
         if (saved) {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          const keys = Object.keys(parsed);
+          console.log('[Dashboard] Loaded candle history:', keys.length, 'series');
+          return parsed;
         }
       } catch (e) {
         console.warn('Failed to load candle history from localStorage');
@@ -1373,6 +1376,7 @@ export default function Dashboard() {
           trimmed[key] = candles.slice(-150);
         });
         localStorage.setItem('weltrade_candle_history', JSON.stringify(trimmed));
+        console.log('[Dashboard] Saved candle history:', Object.keys(trimmed).length, 'series');
       } catch (e) {
         console.warn('Failed to save candle history to localStorage');
       }
