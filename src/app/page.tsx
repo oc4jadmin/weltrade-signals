@@ -323,6 +323,7 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
   const chartRef = useRef<any>(null);
   const candleSeriesRef = useRef<any>(null);
   const volumeSeriesRef = useRef<any>(null);
+  const lastPriceRef = useRef<{ price: number; time: number } | null>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState("M5");
 
   useEffect(() => {
@@ -430,7 +431,9 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
     };
   }, [symbol, selectedTimeframe]);
 
-  // Update chart with live tick data when realPrices change
+  // Live price update - uses a fast tick series that updates frequently
+  const lastPriceRef = useRef<{ price: number; time: number } | null>(null);
+  
   useEffect(() => {
     if (!candleSeriesRef.current || !realPrices) return;
     
@@ -441,17 +444,31 @@ const ChartPanel = ({ symbol, realPrices }: { symbol: string; realPrices?: Recor
     const now = Math.floor(Date.now() / 1000);
     
     try {
-      // Lightweight Charts requires unique, increasing time
-      // For "realtime" mode, set the last bar's time and update close only
-      candleSeriesRef.current.update({
-        time: now as any,
-        open: midPrice,
-        high: midPrice,
-        low: midPrice,
-        close: midPrice,
-      });
+      const last = lastPriceRef.current;
+      
+      if (last && last.time === now) {
+        // Same second - update current candle
+        candleSeriesRef.current.update({
+          time: now as any,
+          open: last.price,
+          high: Math.max(last.price, midPrice),
+          low: Math.min(last.price, midPrice),
+          close: midPrice,
+        });
+      } else {
+        // New second - add new candle starting from last close
+        candleSeriesRef.current.update({
+          time: now as any,
+          open: last ? last.price : midPrice,
+          high: midPrice,
+          low: midPrice,
+          close: midPrice,
+        });
+      }
+      
+      lastPriceRef.current = { price: midPrice, time: now };
     } catch (e) {
-      // If time conflict, silently ignore - the next tick will replace it
+      // Ignore update errors
     }
   }, [realPrices, symbol]);
 
