@@ -160,7 +160,13 @@ connectBtn.addEventListener('click', async () => {
     if (!tab) return;
     
     if (!tab.url?.includes('weltrade')) {
-      scanResult.textContent = 'Not on Weltrade page';
+      scanResult.textContent = 'Not on Weltrade page.\nURL: ' + (tab.url || 'unknown');
+      return;
+    }
+    
+    // Check if page has error
+    if (tab.url?.includes('chrome-error://') || tab.title?.includes('error')) {
+      scanResult.textContent = 'Page has error. Please refresh Weltrade page first.';
       return;
     }
     
