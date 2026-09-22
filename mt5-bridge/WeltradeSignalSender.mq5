@@ -120,7 +120,7 @@ void CheckSignal(string mt5Symbol, string dashSymbol, ENUM_TIMEFRAMES tf, string
    {
       if(currentTime != LastSignalTime[symbolIdx][tfIdx][0])
       {
-         SendSignal(dashSymbol, tfStr, "BUY", price, tick);
+         SendSignal(dashSymbol, tfStr, "BUY", price);
          LastSignalTime[symbolIdx][tfIdx][0] = currentTime;
       }
    }
@@ -130,14 +130,14 @@ void CheckSignal(string mt5Symbol, string dashSymbol, ENUM_TIMEFRAMES tf, string
    {
       if(currentTime != LastSignalTime[symbolIdx][tfIdx][1])
       {
-         SendSignal(dashSymbol, tfStr, "SELL", price, tick);
+         SendSignal(dashSymbol, tfStr, "SELL", price);
          LastSignalTime[symbolIdx][tfIdx][1] = currentTime;
       }
    }
 }
 
 //+------------------------------------------------------------------+
-void SendSignal(string symbol, string timeframe, string type, double entry, MqlTick tick)
+void SendSignal(string symbol, string timeframe, string type, double entry)
 {
    int slPoints = 100;
    int tp1Points = 100;
