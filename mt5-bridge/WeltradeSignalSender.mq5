@@ -10,18 +10,20 @@
 input string DashboardUrl = "https://weltrade-signals.vercel.app/api/signals";
 input int    UpdateIntervalSec = 5;
 
-// Symbols to monitor
-string MT5Symbols[] = {"FX Vol 99", "FX Vol 80"};
-string DashSymbols[] = {"FXVOL99", "FXVOL80"};
-ENUM_TIMEFRAMES TFs[] = {PERIOD_M1, PERIOD_M5, PERIOD_M15};
-string TFStrings[] = {"M1", "M5", "M15"};
+// Symbol names
+string SYMBOL_99_MT5 = "FX Vol 99";
+string SYMBOL_80_MT5 = "FX Vol 80";
+string SYMBOL_99_DASH = "FXVOL99";
+string SYMBOL_80_DASH = "FXVOL80";
 
-// Indicator handles: [symbolIdx][tfIdx]
-int EMAHandles[2][3];
-int StochHandles[2][3];
+// Indicator handles
+int EMA99_M1, EMA99_M5, EMA99_M15;
+int EMA80_M1, EMA80_M5, EMA80_M15;
+int STOCH99_M1, STOCH99_M5, STOCH99_M15;
+int STOCH80_M1, STOCH80_M5, STOCH80_M15;
 
-// Last signal time tracking to avoid duplicates
-// [symbol][tf][type: 0=buy, 1=sell]
+// Last signal time tracking
+// index: symbol (0=99, 1=80), tf (0=M1, 1=M5, 2=M15), type (0=buy, 1=sell)
 datetime LastSignalTime[2][3][2];
 
 //+------------------------------------------------------------------+
@@ -29,19 +31,25 @@ int OnInit()
 {
    EventSetTimer(UpdateIntervalSec);
    
-   for(int s = 0; s < ArraySize(MT5Symbols); s++)
-   {
-      for(int t = 0; t < ArraySize(TFs); t++)
-      {
-         EMAHandles[s][t] = iMA(MT5Symbols[s], TFs[t], 50, 0, MODE_EMA, PRICE_CLOSE);
-         StochHandles[s][t] = iStochastic(MT5Symbols[s], TFs[t], 5, 3, 3, MODE_SMA, STO_LOWHIGH);
-         
-         if(EMAHandles[s][t] == INVALID_HANDLE || StochHandles[s][t] == INVALID_HANDLE)
-         {
-            Print("Failed to create indicators for ", MT5Symbols[s], " ", TFStrings[t]);
-         }
-      }
-   }
+   // EMA50 handles for FX Vol 99
+   EMA99_M1 = iMA(SYMBOL_99_MT5, PERIOD_M1, 50, 0, MODE_EMA, PRICE_CLOSE);
+   EMA99_M5 = iMA(SYMBOL_99_MT5, PERIOD_M5, 50, 0, MODE_EMA, PRICE_CLOSE);
+   EMA99_M15 = iMA(SYMBOL_99_MT5, PERIOD_M15, 50, 0, MODE_EMA, PRICE_CLOSE);
+   
+   // EMA50 handles for FX Vol 80
+   EMA80_M1 = iMA(SYMBOL_80_MT5, PERIOD_M1, 50, 0, MODE_EMA, PRICE_CLOSE);
+   EMA80_M5 = iMA(SYMBOL_80_MT5, PERIOD_M5, 50, 0, MODE_EMA, PRICE_CLOSE);
+   EMA80_M15 = iMA(SYMBOL_80_MT5, PERIOD_M15, 50, 0, MODE_EMA, PRICE_CLOSE);
+   
+   // Stochastic (5,3,3) handles for FX Vol 99
+   STOCH99_M1 = iStochastic(SYMBOL_99_MT5, PERIOD_M1, 5, 3, 3, MODE_SMA, STO_LOWHIGH);
+   STOCH99_M5 = iStochastic(SYMBOL_99_MT5, PERIOD_M5, 5, 3, 3, MODE_SMA, STO_LOWHIGH);
+   STOCH99_M15 = iStochastic(SYMBOL_99_MT5, PERIOD_M15, 5, 3, 3, MODE_SMA, STO_LOWHIGH);
+   
+   // Stochastic (5,3,3) handles for FX Vol 80
+   STOCH80_M1 = iStochastic(SYMBOL_80_MT5, PERIOD_M1, 5, 3, 3, MODE_SMA, STO_LOWHIGH);
+   STOCH80_M5 = iStochastic(SYMBOL_80_MT5, PERIOD_M5, 5, 3, 3, MODE_SMA, STO_LOWHIGH);
+   STOCH80_M15 = iStochastic(SYMBOL_80_MT5, PERIOD_M15, 5, 3, 3, MODE_SMA, STO_LOWHIGH);
    
    Print("WeltradeSignalSender v3.00: Initialized");
    return(INIT_SUCCEEDED);
@@ -51,53 +59,55 @@ int OnInit()
 void OnDeinit(const int reason)
 {
    EventKillTimer();
-   for(int s = 0; s < ArraySize(MT5Symbols); s++)
-   {
-      for(int t = 0; t < ArraySize(TFs); t++)
-      {
-         IndicatorRelease(EMAHandles[s][t]);
-         IndicatorRelease(StochHandles[s][t]);
-      }
-   }
+   
+   IndicatorRelease(EMA99_M1);
+   IndicatorRelease(EMA99_M5);
+   IndicatorRelease(EMA99_M15);
+   IndicatorRelease(EMA80_M1);
+   IndicatorRelease(EMA80_M5);
+   IndicatorRelease(EMA80_M15);
+   
+   IndicatorRelease(STOCH99_M1);
+   IndicatorRelease(STOCH99_M5);
+   IndicatorRelease(STOCH99_M15);
+   IndicatorRelease(STOCH80_M1);
+   IndicatorRelease(STOCH80_M5);
+   IndicatorRelease(STOCH80_M15);
 }
 
 //+------------------------------------------------------------------+
 void OnTimer()
 {
-   for(int s = 0; s < ArraySize(MT5Symbols); s++)
-   {
-      for(int t = 0; t < ArraySize(TFs); t++)
-      {
-         CheckAndSendSignal(s, t);
-      }
-   }
+   CheckSignal(SYMBOL_99_MT5, SYMBOL_99_DASH, PERIOD_M1, "M1", EMA99_M1, STOCH99_M1, 0, 0);
+   CheckSignal(SYMBOL_99_MT5, SYMBOL_99_DASH, PERIOD_M5, "M5", EMA99_M5, STOCH99_M5, 0, 1);
+   CheckSignal(SYMBOL_99_MT5, SYMBOL_99_DASH, PERIOD_M15, "M15", EMA99_M15, STOCH99_M15, 0, 2);
+   
+   CheckSignal(SYMBOL_80_MT5, SYMBOL_80_DASH, PERIOD_M1, "M1", EMA80_M1, STOCH80_M1, 1, 0);
+   CheckSignal(SYMBOL_80_MT5, SYMBOL_80_DASH, PERIOD_M5, "M5", EMA80_M5, STOCH80_M5, 1, 1);
+   CheckSignal(SYMBOL_80_MT5, SYMBOL_80_DASH, PERIOD_M15, "M15", EMA80_M15, STOCH80_M15, 1, 2);
 }
 
 //+------------------------------------------------------------------+
-void CheckAndSendSignal(int symbolIdx, int tfIdx)
+void CheckSignal(string mt5Symbol, string dashSymbol, ENUM_TIMEFRAMES tf, string tfStr, int emaHandle, int stochHandle, int symbolIdx, int tfIdx)
 {
-   string mt5Symbol = MT5Symbols[symbolIdx];
-   string dashSymbol = DashSymbols[symbolIdx];
-   string tfStr = TFStrings[tfIdx];
-   ENUM_TIMEFRAMES tf = TFs[tfIdx];
+   if(emaHandle == INVALID_HANDLE || stochHandle == INVALID_HANDLE) return;
    
-   // Get current price
    MqlTick tick;
    if(!SymbolInfoTick(mt5Symbol, tick)) return;
    double price = (tick.bid + tick.ask) / 2;
    
-   // Get EMA50
-   double ema[];
-   if(CopyBuffer(EMAHandles[symbolIdx][tfIdx], 0, 0, 1, ema) <= 0) return;
+   double ema[1];
+   if(CopyBuffer(emaHandle, 0, 0, 1, ema) <= 0) return;
    double currentEma = ema[0];
    
-   // Get Stochastic (need 2 bars for cross detection)
-   double k[], d[];
-   if(CopyBuffer(StochHandles[symbolIdx][tfIdx], 0, 0, 2, k) <= 0) return;
-   if(CopyBuffer(StochHandles[symbolIdx][tfIdx], 1, 0, 2, d) <= 0) return;
+   double k[2], d[2];
+   if(CopyBuffer(stochHandle, 0, 0, 2, k) <= 0) return;
+   if(CopyBuffer(stochHandle, 1, 0, 2, d) <= 0) return;
    
-   double prevK = k[1], currK = k[0];
-   double prevD = d[1], currD = d[0];
+   double prevK = k[1];
+   double currK = k[0];
+   double prevD = d[1];
+   double currD = d[0];
    
    bool isUptrend = price > currentEma;
    bool isDowntrend = price < currentEma;
@@ -129,12 +139,31 @@ void CheckAndSendSignal(int symbolIdx, int tfIdx)
 //+------------------------------------------------------------------+
 void SendSignal(string symbol, string timeframe, string type, double entry, MqlTick tick)
 {
-   int slPoints = 100, tp1Points = 100, tp2Points = 200, tp3Points = 300;
+   int slPoints = 100;
+   int tp1Points = 100;
+   int tp2Points = 200;
+   int tp3Points = 300;
    
-   if(timeframe == "M5") { slPoints = 120; tp1Points = 150; tp2Points = 300; tp3Points = 450; }
-   else if(timeframe == "M15") { slPoints = 200; tp1Points = 250; tp2Points = 500; tp3Points = 750; }
+   if(timeframe == "M5")
+   {
+      slPoints = 120;
+      tp1Points = 150;
+      tp2Points = 300;
+      tp3Points = 450;
+   }
+   else if(timeframe == "M15")
+   {
+      slPoints = 200;
+      tp1Points = 250;
+      tp2Points = 500;
+      tp3Points = 750;
+   }
    
-   double sl, tp1, tp2, tp3;
+   double sl;
+   double tp1;
+   double tp2;
+   double tp3;
+   
    if(type == "BUY")
    {
       sl = entry - slPoints;
@@ -168,7 +197,8 @@ void SendSignal(string symbol, string timeframe, string type, double entry, MqlT
    
    Print("Signal: ", type, " ", symbol, " ", timeframe, " @", entry);
    
-   char data[], result[];
+   char data[];
+   char result[];
    string headers;
    StringToCharArray(json, data);
    
