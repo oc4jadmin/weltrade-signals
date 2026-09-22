@@ -1,33 +1,18 @@
 {
   "manifest_version": 3,
   "name": "Weltrade Price Extractor",
-  "version": "1.5.0",
-  "description": "Extract real-time FX Vol prices from Weltrade Web Terminal",
-  "permissions": ["activeTab", "storage", "scripting"],
-  "host_permissions": [
-    "*://*.weltrade.com/*",
-    "*://weltrade.com/*",
-    "*://*.weltrade.io/*",
-    "*://weltrade.io/*",
-    "http://localhost:3000/*",
-    "http://localhost/*",
-    "https://weltrade-signals.vercel.app/*",
-    "https://*.vercel.app/*"
-  ],
+  "version": "1.6.0",
+  "description": "Extract FX Vol prices from Weltrade Web Terminal",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["*://secure.weltrade.com/*"],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": [
-        "*://*.weltrade.com/*",
-        "*://weltrade.com/*",
-        "*://*.weltrade.io/*",
-        "*://weltrade.io/*"
-      ],
+      "matches": ["*://secure.weltrade.com/*"],
       "js": ["content.js"],
-      "run_at": "document_start",
-      "all_frames": false
+      "run_at": "document_start"
     }
   ],
   "action": {
