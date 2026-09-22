@@ -277,19 +277,27 @@ const Sidebar = ({
   unreadCount,
   extensionConnected,
   pricesCount,
+  userRole,
+  onLogout,
 }: {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   unreadCount: number;
   extensionConnected: boolean;
   pricesCount: number;
+  userRole: "admin" | "user";
+  onLogout: () => void;
 }) => {
-  const menuItems = [
+  const allMenuItems = [
     { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { id: "signals", icon: BarChart3, label: "Signals" },
     { id: "telegram", icon: Send, label: "Telegram Bot" },
     { id: "settings", icon: Settings, label: "Settings" },
   ];
+  
+  const menuItems = userRole === "admin" 
+    ? allMenuItems 
+    : allMenuItems.filter(item => item.id === "dashboard" || item.id === "signals");
 
   return (
     <aside className="w-64 bg-dark-300 border-r border-slate-700/50 flex flex-col h-screen">
@@ -358,6 +366,14 @@ const Sidebar = ({
               <span className="text-xs text-success">Active</span>
             </div>
           </div>
+          
+          {/* Logout Button */}
+          <button
+            onClick={onLogout}
+            className="w-full mt-4 bg-danger/20 hover:bg-danger/30 text-danger text-sm py-2 rounded-lg transition-colors"
+          >
+            Logout ({userRole})
+          </button>
         </div>
         
         {/* Extension Install Guide */}
@@ -1299,6 +1315,45 @@ export default function Dashboard() {
     connected: true,
   });
   
+  // Login state
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState<"admin" | "user" | null>(null);
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [loginError, setLoginError] = useState("");
+  
+  // Check existing login on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedRole = localStorage.getItem('weltrade_user_role');
+      if (savedRole === 'admin' || savedRole === 'user') {
+        setUserRole(savedRole);
+        setIsLoggedIn(true);
+      }
+    }
+  }, []);
+  
+  const handleLogin = () => {
+    if (loginForm.username === "admin" && loginForm.password === "admin123") {
+      setUserRole("admin");
+      setIsLoggedIn(true);
+      localStorage.setItem('weltrade_user_role', 'admin');
+      setLoginError("");
+    } else if (loginForm.username === "user" && loginForm.password === "user123") {
+      setUserRole("user");
+      setIsLoggedIn(true);
+      localStorage.setItem('weltrade_user_role', 'user');
+      setLoginError("");
+    } else {
+      setLoginError("Invalid username or password");
+    }
+  };
+  
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserRole(null);
+    localStorage.removeItem('weltrade_user_role');
+  };
+  
   // Extension connection state
   const [extensionConnected, setExtensionConnected] = useState(false);
   const [realPrices, setRealPrices] = useState<Record<string, { bid: number; ask: number }>>({});
@@ -1475,6 +1530,67 @@ export default function Dashboard() {
 
   const activeSignalsCount = signals.filter((s) => s.status === "ACTIVE").length;
 
+  // Login Screen
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-dark-400 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-dark-300 rounded-2xl p-8 border border-slate-700/50">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
+              <Zap className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-white">Weltrade Signals</h1>
+            <p className="text-slate-400 mt-2">Sign in to access dashboard</p>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-slate-400 block mb-2">Username</label>
+              <input
+                type="text"
+                value={loginForm.username}
+                onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
+                className="w-full bg-dark-200 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+                placeholder="admin or user"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm text-slate-400 block mb-2">Password</label>
+              <input
+                type="password"
+                value={loginForm.password}
+                onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                className="w-full bg-dark-200 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+                placeholder="Enter password"
+                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+              />
+            </div>
+            
+            {loginError && (
+              <div className="bg-danger/20 border border-danger/50 rounded-lg px-4 py-3 text-danger text-sm">
+                {loginError}
+              </div>
+            )}
+            
+            <button
+              onClick={handleLogin}
+              className="w-full bg-gradient-to-r from-primary-500 to-primary-700 text-white font-semibold py-3 rounded-lg hover:opacity-90 transition-opacity"
+            >
+              Sign In
+            </button>
+            
+            <div className="text-center text-sm text-slate-500 mt-6">
+              <p>Demo credentials:</p>
+              <p>Admin: admin / admin123</p>
+              <p>User: user / user123</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-dark-400">
       {/* Sidebar */}
@@ -1484,6 +1600,8 @@ export default function Dashboard() {
         unreadCount={activeSignalsCount}
         extensionConnected={extensionConnected}
         pricesCount={Object.keys(realPrices).length}
+        userRole={userRole || "user"}
+        onLogout={handleLogout}
       />
 
       {/* Main Content */}
