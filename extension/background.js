@@ -50,18 +50,33 @@ async function sendToDashboard(prices) {
   }
 }
 
-// Inject content script programmatically
+// Inject content script programmatically with MAIN world
 async function injectScript(tabId) {
   try {
+    // Try MAIN world first (bypasses some page restrictions)
     await chrome.scripting.executeScript({
       target: { tabId: tabId },
-      files: ['content.js']
+      files: ['content.js'],
+      world: 'MAIN'
     });
-    console.log('[Background] Content script injected into tab', tabId);
+    console.log('[Background] Content script injected (MAIN world) into tab', tabId);
     return true;
   } catch (e) {
-    console.error('[Background] Injection failed:', e.message);
-    return false;
+    console.log('[Background] MAIN world failed, trying ISOLATED:', e.message);
+    
+    // Fallback to ISOLATED world
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: ['content.js'],
+        world: 'ISOLATED'
+      });
+      console.log('[Background] Content script injected (ISOLATED world) into tab', tabId);
+      return true;
+    } catch (e2) {
+      console.error('[Background] Both injection methods failed:', e2.message);
+      return false;
+    }
   }
 }
 
