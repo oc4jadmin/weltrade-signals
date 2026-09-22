@@ -52,6 +52,18 @@ int OnInit()
    STOCH80_M15 = iStochastic(SYMBOL_80_MT5, PERIOD_M15, 5, 3, 3, MODE_SMA, STO_LOWHIGH);
    
    Print("WeltradeSignalSender v3.00: Initialized");
+   
+   // Test price read
+   MqlTick tick;
+   if(SymbolInfoTick(SYMBOL_99_MT5, tick))
+   {
+      Print("Test tick: bid=", tick.bid, " ask=", tick.ask);
+   }
+   else
+   {
+      Print("Failed to read tick for ", SYMBOL_99_MT5);
+   }
+   
    return(INIT_SUCCEEDED);
 }
 
