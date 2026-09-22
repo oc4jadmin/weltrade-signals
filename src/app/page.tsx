@@ -658,12 +658,12 @@ const ChartPanel = ({
       
       candleSeriesRef.current.update(newCandle as any);
       
-      // Persist to history - keep last 200 candles
+      // Persist to history - keep last 150 candles (localStorage limit)
       setCandleHistory(prev => {
         const existing = prev[historyKey] || [];
         const filtered = existing.filter(c => c.time < candleTime);
         const updated = [...filtered, newCandle];
-        if (updated.length > 200) updated.shift();
+        if (updated.length > 150) updated.shift();
         return { ...prev, [historyKey]: updated };
       });
       
@@ -1300,8 +1300,20 @@ export default function Dashboard() {
   const [extensionConnected, setExtensionConnected] = useState(false);
   const [realPrices, setRealPrices] = useState<Record<string, { bid: number; ask: number }>>({});
   
-  // Shared candle history across charts
-  const [candleHistory, setCandleHistory] = useState<Record<string, Array<{ time: number; open: number; high: number; low: number; close: number }>>>({});
+  // Shared candle history across charts with localStorage persistence
+  const [candleHistory, setCandleHistory] = useState<Record<string, Array<{ time: number; open: number; high: number; low: number; close: number }>>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('weltrade_candle_history');
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (e) {
+        console.warn('Failed to load candle history from localStorage');
+      }
+    }
+    return {};
+  });
 
   // Poll for real prices from extension
   useEffect(() => {
@@ -1349,6 +1361,22 @@ export default function Dashboard() {
       const filteredNew = newSignals.filter(s => !activeIds.has(s.id));
       return [...activeOld, ...filteredNew].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     });
+  }, [candleHistory]);
+
+  // Persist candle history to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && Object.keys(candleHistory).length > 0) {
+      try {
+        // Only keep last 150 candles per series to stay under localStorage limit
+        const trimmed: Record<string, any[]> = {};
+        Object.entries(candleHistory).forEach(([key, candles]) => {
+          trimmed[key] = candles.slice(-150);
+        });
+        localStorage.setItem('weltrade_candle_history', JSON.stringify(trimmed));
+      } catch (e) {
+        console.warn('Failed to save candle history to localStorage');
+      }
+    }
   }, [candleHistory]);
 
   const activeSignalsCount = signals.filter((s) => s.status === "ACTIVE").length;
