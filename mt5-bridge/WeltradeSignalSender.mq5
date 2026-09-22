@@ -185,21 +185,33 @@ void CheckSignal(string mt5Symbol, string dashSymbol, ENUM_TIMEFRAMES tf, string
    datetime currentTime = iTime(mt5Symbol, tf, 0);
    if(currentTime == 0) currentTime = TimeLocal();
    
-   // BUY signal (relaxed: cross up below 30)
+   // Log stochastic values for debugging (every 30 sec)
+   static datetime lastDebugLog[2][3];
+   if(TimeLocal() - lastDebugLog[symbolIdx][tfIdx] > 30)
+   {
+      lastDebugLog[symbolIdx][tfIdx] = TimeLocal();
+      Print("Stoch Debug ", dashSymbol, " ", tfStr, ": Trend=", isUptrend ? "UP" : (isDowntrend ? "DOWN" : "FLAT"), 
+            " prevK=", DoubleToString(prevK, 2), " currK=", DoubleToString(currK, 2),
+            " prevD=", DoubleToString(prevD, 2), " currD=", DoubleToString(currD, 2));
+   }
+   
+   // BUY signal: Uptrend + Stoch cross up below 30
    if(isUptrend && prevK <= 30 && currK > 30 && currK > currD && prevK <= prevD)
    {
       if(currentTime != LastSignalTime[symbolIdx][tfIdx][0])
       {
+         Print("BUY SIGNAL TRIGGERED ", dashSymbol, " ", tfStr);
          SendSignal(dashSymbol, tfStr, "BUY", price);
          LastSignalTime[symbolIdx][tfIdx][0] = currentTime;
       }
    }
    
-   // SELL signal (relaxed: cross down above 70)
+   // SELL signal: Downtrend + Stoch cross down above 70
    if(isDowntrend && prevK >= 70 && currK < 70 && currK < currD && prevK >= prevD)
    {
       if(currentTime != LastSignalTime[symbolIdx][tfIdx][1])
       {
+         Print("SELL SIGNAL TRIGGERED ", dashSymbol, " ", tfStr);
          SendSignal(dashSymbol, tfStr, "SELL", price);
          LastSignalTime[symbolIdx][tfIdx][1] = currentTime;
       }
