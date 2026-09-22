@@ -1291,6 +1291,9 @@ export default function Dashboard() {
     chatId: "",
     enabled: false,
   });
+  
+  // Track notified signals to avoid duplicates
+  const notifiedSignalsRef = useRef<Set<string>>(new Set());
   const [mt5Config, setMt5Config] = useState<MT5Config>({
     server: "Weltrade-Server",
     connected: true,
@@ -1382,6 +1385,37 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // Send Telegram notification for a new signal
+  const sendTelegramNotification = async (signal: Signal) => {
+    if (!telegramConfig.enabled || !telegramConfig.botToken || !telegramConfig.chatId) return;
+    
+    const emoji = signal.type === "BUY" ? "🟢" : "🔴";
+    const message = `${emoji} *NEW ${signal.type} SIGNAL* ${emoji}\n\n` +
+      `*Symbol:* ${signal.symbol}\n` +
+      `*Timeframe:* ${signal.timeframe}\n` +
+      `*Entry:* ${signal.entry}\n` +
+      `*SL:* ${signal.sl}\n` +
+      `*TP1:* ${signal.tp1}\n` +
+      `*TP2:* ${signal.tp2}\n` +
+      `*TP3:* ${signal.tp3}\n` +
+      `*Strategy:* ${signal.indicator}\n` +
+      `*Confidence:* ${signal.confidence}%`;
+    
+    try {
+      await fetch(`https://api.telegram.org/bot${telegramConfig.botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: telegramConfig.chatId,
+          text: message,
+          parse_mode: 'Markdown'
+        })
+      });
+    } catch (e) {
+      console.warn('Failed to send Telegram notification');
+    }
+  };
+
   // Fetch signals from MT5 EA via API
   useEffect(() => {
     const fetchSignals = async () => {
@@ -1398,7 +1432,17 @@ export default function Dashboard() {
               // Merge with existing, keep latest 10
               const merged = [...formattedSignals, ...prev];
               const unique = Array.from(new Map(merged.map(s => [s.id, s])).values());
-              return unique.slice(0, 10).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+              const result = unique.slice(0, 10).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+              
+              // Notify for new ACTIVE signals
+              result.forEach(signal => {
+                if (signal.status === "ACTIVE" && !notifiedSignalsRef.current.has(signal.id)) {
+                  notifiedSignalsRef.current.add(signal.id);
+                  sendTelegramNotification(signal);
+                }
+              });
+              
+              return result;
             });
           }
         }
@@ -1410,7 +1454,7 @@ export default function Dashboard() {
     fetchSignals();
     const interval = setInterval(fetchSignals, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [telegramConfig.botToken, telegramConfig.chatId, telegramConfig.enabled]);
 
   // Persist candle history to localStorage whenever it changes
   useEffect(() => {
