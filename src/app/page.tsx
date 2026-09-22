@@ -1395,10 +1395,10 @@ export default function Dashboard() {
               timestamp: new Date(s.timestamp)
             }));
             setSignals(prev => {
-              // Merge with existing, keep latest 100
+              // Merge with existing, keep latest 10
               const merged = [...formattedSignals, ...prev];
               const unique = Array.from(new Map(merged.map(s => [s.id, s])).values());
-              return unique.slice(0, 100).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+              return unique.slice(0, 10).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
             });
           }
         }
