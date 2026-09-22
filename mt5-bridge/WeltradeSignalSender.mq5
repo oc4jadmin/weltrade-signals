@@ -78,6 +78,22 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTimer()
 {
+   static datetime lastLog = 0;
+   if(TimeLocal() - lastLog > 60)
+   {
+      lastLog = TimeLocal();
+      MqlTick tick;
+      if(SymbolInfoTick(SYMBOL_99_MT5, tick))
+      {
+         double price = (tick.bid + tick.ask) / 2;
+         double ema[1];
+         if(CopyBuffer(EMA99_M1, 0, 0, 1, ema) > 0)
+         {
+            Print("Status: Price=", DoubleToString(price, 2), " EMA50=", DoubleToString(ema[0], 2), " Trend=", price > ema[0] ? "UP" : "DOWN");
+         }
+      }
+   }
+   
    CheckSignal(SYMBOL_99_MT5, SYMBOL_99_DASH, PERIOD_M1, "M1", EMA99_M1, STOCH99_M1, 0, 0);
    CheckSignal(SYMBOL_99_MT5, SYMBOL_99_DASH, PERIOD_M5, "M5", EMA99_M5, STOCH99_M5, 0, 1);
    CheckSignal(SYMBOL_99_MT5, SYMBOL_99_DASH, PERIOD_M15, "M15", EMA99_M15, STOCH99_M15, 0, 2);
