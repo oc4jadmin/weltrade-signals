@@ -455,7 +455,7 @@ const PriceTicker = ({ realPrices }: { realPrices: Record<string, { bid: number;
   }, []);
 
   return (
-    <div className="grid grid-cols-5 gap-3 p-4 bg-dark-300 border-b border-slate-700/50">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-3 p-3 lg:p-4 bg-dark-300 border-b border-slate-700/50">
       {SYMBOLS.slice(0, 5).map((symbol) => {
         const realPrice = realPrices[symbol.symbol];
         const displayPrice = realPrice ? (realPrice.bid + realPrice.ask) / 2 : mockPrices[symbol.symbol];
@@ -464,21 +464,21 @@ const PriceTicker = ({ realPrices }: { realPrices: Record<string, { bid: number;
         return (
           <div
             key={symbol.symbol}
-            className={`bg-dark-100 rounded-lg p-3 text-center ${isReal ? "ring-1 ring-success/50" : ""}`}
+            className={`bg-dark-100 rounded-lg p-2 lg:p-3 text-center ${isReal ? "ring-1 ring-success/50" : ""}`}
           >
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs text-slate-400">{symbol.symbol}</p>
+            <div className="flex items-center justify-center gap-1 mb-1">
+              <p className="text-xs text-slate-400 truncate">{symbol.symbol}</p>
               {isReal && (
-                <div className="w-1.5 h-1.5 rounded-full bg-success signal-live"></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-success signal-live flex-shrink-0"></div>
               )}
             </div>
-            <p className={`text-lg font-bold ${isReal ? "text-success" : "text-white"}`}>
+            <p className={`text-base lg:text-lg font-bold ${isReal ? "text-success" : "text-white"} truncate`}>
               {displayPrice?.toFixed(2) || "---"}
             </p>
             {isReal && realPrice && (
-              <div className="flex justify-between text-xs mt-1">
-                <span className="text-success">B:{realPrice.bid.toFixed(2)}</span>
-                <span className="text-danger">A:{realPrice.ask.toFixed(2)}</span>
+              <div className="flex justify-between text-[10px] lg:text-xs mt-1">
+                <span className="text-success truncate">B:{realPrice.bid.toFixed(2)}</span>
+                <span className="text-danger truncate">A:{realPrice.ask.toFixed(2)}</span>
               </div>
             )}
           </div>
