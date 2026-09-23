@@ -1447,10 +1447,14 @@ export default function Dashboard() {
                   else if (currentPrice >= tp1) newStatus = "HIT_TP1";
                   else if (currentPrice <= sl) newStatus = "HIT_SL";
                 } else {
+                  // SELL logic - log for debugging
                   if (currentPrice <= tp3) newStatus = "HIT_TP3";
                   else if (currentPrice <= tp2) newStatus = "HIT_TP2";
                   else if (currentPrice <= tp1) newStatus = "HIT_TP1";
-                  else if (currentPrice >= sl) newStatus = "HIT_SL";
+                  else if (currentPrice >= sl) {
+                    console.log(`[Signal Debug] SELL HIT_SL: price=${currentPrice}, entry=${signal.entry}, sl=${sl}, tp1=${tp1}`);
+                    newStatus = "HIT_SL";
+                  }
                 }
                 
                 if (newStatus !== signal.status) {
