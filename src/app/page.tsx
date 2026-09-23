@@ -280,6 +280,8 @@ const Sidebar = ({
   userRole,
   onLogout,
   onAdminLogin,
+  isMobileOpen,
+  onMobileClose,
 }: {
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -289,6 +291,8 @@ const Sidebar = ({
   userRole: "admin" | "user";
   onLogout: () => void;
   onAdminLogin: () => void;
+  isMobileOpen: boolean;
+  onMobileClose: () => void;
 }) => {
   const allMenuItems = [
     { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -302,7 +306,30 @@ const Sidebar = ({
     : allMenuItems.filter(item => item.id === "dashboard" || item.id === "signals");
 
   return (
-    <aside className="w-64 bg-dark-300 border-r border-slate-700/50 flex flex-col h-screen">
+    <>
+      {/* Mobile overlay */}
+      {isMobileOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={onMobileClose}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <aside className={`
+        fixed lg:static inset-y-0 left-0 z-40
+        w-64 bg-dark-300 border-r border-slate-700/50 
+        flex flex-col h-screen
+        transform transition-transform duration-300 ease-in-out
+        ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        {/* Mobile close button */}
+        <div className="lg:hidden flex justify-end p-4">
+          <button onClick={onMobileClose} className="text-slate-400 hover:text-white">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+        
       {/* Logo */}
       <div className="p-6 border-b border-slate-700/50">
         <div className="flex items-center gap-3">
@@ -397,7 +424,8 @@ const Sidebar = ({
           </div>
         )}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };
 
@@ -729,7 +757,7 @@ const ChartPanel = ({
       </div>
 
       {/* Chart */}
-      <div ref={chartContainerRef} className="h-[400px]" />
+      <div ref={chartContainerRef} className="h-[300px] lg:h-[400px]" />
     </div>
   );
 };
@@ -1534,9 +1562,18 @@ export default function Dashboard() {
   }, [candleHistory]);
 
   const activeSignalsCount = signals.filter((s) => s.status === "ACTIVE").length;
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <div className="flex h-screen bg-dark-400">
+      {/* Mobile Menu Button */}
+      <button
+        onClick={() => setIsMobileMenuOpen(true)}
+        className="lg:hidden fixed top-4 left-4 z-20 p-2 bg-dark-300 rounded-lg border border-slate-700/50"
+      >
+        <BarChart3 className="w-6 h-6 text-white" />
+      </button>
+      
       {/* Admin Login Modal */}
       {showAdminLogin && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -1607,16 +1644,18 @@ export default function Dashboard() {
         userRole={userRole}
         onLogout={handleLogout}
         onAdminLogin={() => setShowAdminLogin(true)}
+        isMobileOpen={isMobileMenuOpen}
+        onMobileClose={() => setIsMobileMenuOpen(false)}
       />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto lg:ml-0">
         {/* Header */}
         <header className="sticky top-0 z-10 bg-dark-300/95 backdrop-blur border-b border-slate-700/50">
-          <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center justify-between px-4 lg:px-6 py-4 ml-14 lg:ml-0">
             <div className="flex items-center gap-4">
-              <h2 className="text-xl font-bold text-white capitalize">{activeTab}</h2>
-              <span className="text-sm text-slate-400">
+              <h2 className="text-lg lg:text-xl font-bold text-white capitalize">{activeTab}</h2>
+              <span className="hidden sm:inline text-sm text-slate-400">
                 {new Date().toLocaleDateString("en-US", {
                   weekday: "long",
                   year: "numeric",
@@ -1625,14 +1664,14 @@ export default function Dashboard() {
                 })}
               </span>
               {extensionConnected && (
-                <span className="px-2 py-1 bg-success/20 text-success text-xs rounded flex items-center gap-1">
+                <span className="px-2 py-1 bg-success/20 text-success text-xs rounded flex items-center gap-1 whitespace-nowrap">
                   <div className="w-1.5 h-1.5 rounded-full bg-success signal-live"></div>
-                  Live Data
+                  <span className="hidden xs:inline">Live</span> Data
                 </span>
               )}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 lg:gap-3">
               {/* Symbol Selector */}
               <select
                 value={selectedSymbol}
@@ -1672,37 +1711,37 @@ export default function Dashboard() {
         </header>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-4 lg:p-6">
           {activeTab === "dashboard" && (
             <div className="space-y-6">
               {/* Stats Cards */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="bg-dark-200 rounded-lg p-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+                <div className="bg-dark-200 rounded-lg p-3 lg:p-4">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-success/20 flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-success" />
+                    <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg bg-success/20 flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4 lg:w-5 lg:h-5 text-success" />
                     </div>
-                    <span className="text-sm text-slate-400">Active Signals</span>
+                    <span className="text-xs lg:text-sm text-slate-400">Active Signals</span>
                   </div>
-                  <p className="text-2xl font-bold text-white">{activeSignalsCount}</p>
+                  <p className="text-xl lg:text-2xl font-bold text-white">{activeSignalsCount}</p>
                 </div>
 
-                <div className="bg-dark-200 rounded-lg p-4">
+                <div className="bg-dark-200 rounded-lg p-3 lg:p-4">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-primary-500/20 flex items-center justify-center">
-                      <Check className="w-5 h-5 text-primary-400" />
+                    <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg bg-primary-500/20 flex items-center justify-center">
+                      <Check className="w-4 h-4 lg:w-5 lg:h-5 text-primary-400" />
                     </div>
-                    <span className="text-sm text-slate-400">TP Hit</span>
+                    <span className="text-xs lg:text-sm text-slate-400">TP Hit</span>
                   </div>
-                  <p className="text-2xl font-bold text-white">
+                  <p className="text-xl lg:text-2xl font-bold text-white">
                     {signals.filter((s) => s.status.startsWith("HIT_TP")).length}
                   </p>
                 </div>
 
-                <div className="bg-dark-200 rounded-lg p-4">
+                <div className="bg-dark-200 rounded-lg p-3 lg:p-4">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-danger/20 flex items-center justify-center">
-                      <X className="w-5 h-5 text-danger" />
+                    <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg bg-danger/20 flex items-center justify-center">
+                      <X className="w-4 h-4 lg:w-5 lg:h-5 text-danger" />
                     </div>
                     <span className="text-sm text-slate-400">SL Hit Today</span>
                   </div>
