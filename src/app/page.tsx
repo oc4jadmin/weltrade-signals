@@ -1735,6 +1735,21 @@ export default function Dashboard() {
   };
 
   // Fetch signals from MT5 EA via API
+  // Load deleted signals from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('weltrade_deleted_signals');
+        if (saved) {
+          const deletedIds = new Set(JSON.parse(saved));
+          setSignals(prev => prev.filter(s => !deletedIds.has(s.id)));
+        }
+      } catch (e) {
+        console.warn('Failed to load deleted signals');
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const fetchSignals = async () => {
       try {
@@ -1746,9 +1761,21 @@ export default function Dashboard() {
               ...s,
               timestamp: new Date(s.timestamp)
             }));
+            
+            // Filter out deleted signals
+            let deletedIds = new Set<string>();
+            try {
+              const saved = localStorage.getItem('weltrade_deleted_signals');
+              if (saved) {
+                deletedIds = new Set(JSON.parse(saved));
+              }
+            } catch (e) {}
+            
+            const filteredSignals = formattedSignals.filter(s => !deletedIds.has(s.id));
+            
             setSignals(prev => {
               // Merge with existing, keep latest 10
-              const merged = [...formattedSignals, ...prev];
+              const merged = [...filteredSignals, ...prev];
               const unique = Array.from(new Map(merged.map(s => [s.id, s])).values());
               const result = unique.slice(0, 10).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
               
@@ -2021,9 +2048,27 @@ export default function Dashboard() {
             <div className="space-y-6">
               <SignalsTable 
                 signals={signals} 
-                onDeleteSignal={(id) => setSignals(signals.filter((s) => s.id !== id))}
-                onDeleteAll={() => setSignals([])}
-                onDeleteByStatus={(status) => setSignals(signals.filter((s) => s.status !== status))}
+                onDeleteSignal={(id) => {
+                  const newSignals = signals.filter((s) => s.id !== id);
+                  setSignals(newSignals);
+                  // Save to localStorage
+                  try {
+                    localStorage.setItem('weltrade_deleted_signals', JSON.stringify(Array.from(newSignals.map(s => s.id))));
+                  } catch (e) {}
+                }}
+                onDeleteAll={() => {
+                  setSignals([]);
+                  try {
+                    localStorage.setItem('weltrade_deleted_signals', JSON.stringify([]));
+                  } catch (e) {}
+                }}
+                onDeleteByStatus={(status) => {
+                  const newSignals = signals.filter((s) => s.status !== status);
+                  setSignals(newSignals);
+                  try {
+                    localStorage.setItem('weltrade_deleted_signals', JSON.stringify(Array.from(newSignals.map(s => s.id))));
+                  } catch (e) {}
+                }}
               />
             </div>
           )}
