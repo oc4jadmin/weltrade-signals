@@ -86,6 +86,154 @@ const generatePriceData = (basePrice: number, count: number) => {
   return data;
 };
 
+// ZigZag calculation - finds swing highs and lows
+function calculateZigZag(candles: Array<{ time: number; high: number; low: number }>, deviation: number = 0.5) {
+  if (candles.length < 3) return { highs: [], lows: [] };
+  
+  const highs: Array<{ time: number; price: number }> = [];
+  const lows: Array<{ time: number; price: number }> = [];
+  
+  let trend: 'up' | 'down' | null = null;
+  let lastHigh = { time: 0, price: 0 };
+  let lastLow = { time: 0, price: 0 };
+  
+  for (let i = 1; i < candles.length - 1; i++) {
+    const prev = candles[i - 1];
+    const curr = candles[i];
+    const next = candles[i + 1];
+    
+    // Swing high
+    if (curr.high > prev.high && curr.high > next.high) {
+      if (trend !== 'up' || curr.high > lastHigh.price * (1 + deviation / 100)) {
+        highs.push({ time: curr.time, price: curr.high });
+        lastHigh = { time: curr.time, price: curr.high };
+        trend = 'up';
+      }
+    }
+    
+    // Swing low
+    if (curr.low < prev.low && curr.low < next.low) {
+      if (trend !== 'down' || curr.low < lastLow.price * (1 - deviation / 100)) {
+        lows.push({ time: curr.time, price: curr.low });
+        lastLow = { time: curr.time, price: curr.low };
+        trend = 'down';
+      }
+    }
+  }
+  
+  return { highs, lows };
+}
+
+// SMC Order Block detection - last opposite candle before impulse
+function detectOrderBlocks(candles: Array<{ time: number; open: number; high: number; low: number; close: number }>, lookback: number = 10) {
+  const blocks: Array<{ time: number; top: number; bottom: number; type: 'bullish' | 'bearish' }> = [];
+  
+  for (let i = lookback; i < candles.length; i++) {
+    const window = candles.slice(i - lookback, i + 1);
+    const lastCandle = candles[i];
+    const body = Math.abs(lastCandle.close - lastCandle.open);
+    const range = lastCandle.high - lastCandle.low;
+    
+    // Bullish order block: strong down candle followed by up move
+    if (lastCandle.close > lastCandle.open && body > range * 0.6) {
+      const prevCandles = window.slice(0, -1).filter(c => c.close < c.open);
+      if (prevCandles.length > 0) {
+        const blockCandle = prevCandles[prevCandles.length - 1];
+        blocks.push({
+          time: blockCandle.time,
+          top: blockCandle.high,
+          bottom: blockCandle.low,
+          type: 'bullish'
+        });
+      }
+    }
+    
+    // Bearish order block: strong up candle followed by down move
+    if (lastCandle.close < lastCandle.open && body > range * 0.6) {
+      const prevCandles = window.slice(0, -1).filter(c => c.close > c.open);
+      if (prevCandles.length > 0) {
+        const blockCandle = prevCandles[prevCandles.length - 1];
+        blocks.push({
+          time: blockCandle.time,
+          top: blockCandle.high,
+          bottom: blockCandle.low,
+          type: 'bearish'
+        });
+      }
+    }
+  }
+  
+  return blocks.slice(-5); // Keep last 5 blocks
+}
+
+// FVG (Fair Value Gap) detection
+function detectFVG(candles: Array<{ time: number; high: number; low: number }>, minGapSize: number = 0.001) {
+  const fvgs: Array<{ time: number; top: number; bottom: number; type: 'bullish' | 'bearish' }> = [];
+  
+  for (let i = 1; i < candles.length - 1; i++) {
+    const prev = candles[i - 1];
+    const curr = candles[i];
+    const next = candles[i + 1];
+    
+    // Bullish FVG: gap between prev high and next low
+    if (next.low > prev.high) {
+      const gapSize = next.low - prev.high;
+      if (gapSize > minGapSize * curr.low) {
+        fvgs.push({
+          time: curr.time,
+          top: next.low,
+          bottom: prev.high,
+          type: 'bullish'
+        });
+      }
+    }
+    
+    // Bearish FVG: gap between next high and prev low
+    if (next.high < prev.low) {
+      const gapSize = prev.low - next.high;
+      if (gapSize > minGapSize * curr.high) {
+        fvgs.push({
+          time: curr.time,
+          top: prev.low,
+          bottom: next.high,
+          type: 'bearish'
+        });
+      }
+    }
+  }
+  
+  return fvgs.slice(-10); // Keep last 10 FVGs
+}
+
+// Support/Resistance levels from swing points
+function calculateSupportResistance(candles: Array<{ time: number; high: number; low: number }>, tolerance: number = 0.5) {
+  const { highs, lows } = calculateZigZag(candles, 1.0);
+  
+  const levels: Array<{ price: number; type: 'support' | 'resistance'; strength: number }> = [];
+  
+  // Cluster highs into resistance levels
+  highs.forEach(h => {
+    const existing = levels.find(l => l.type === 'resistance' && Math.abs(l.price - h.price) / h.price < tolerance / 100);
+    if (existing) {
+      existing.strength++;
+    } else {
+      levels.push({ price: h.price, type: 'resistance', strength: 1 });
+    }
+  });
+  
+  // Cluster lows into support levels
+  lows.forEach(l => {
+    const existing = levels.find(le => le.type === 'support' && Math.abs(le.price - l.price) / l.price < tolerance / 100);
+    if (existing) {
+      existing.strength++;
+    } else {
+      levels.push({ price: l.price, type: 'support', strength: 1 });
+    }
+  });
+  
+  return levels.sort((a, b) => b.strength - a.strength).slice(0, 5);
+}
+
 // Technical indicator helpers
 function calculateEMA(data: number[], period: number): number[] {
   const k = 2 / (period + 1);
@@ -631,6 +779,84 @@ const ChartPanel = ({
           color: d.close >= d.open ? "rgba(34, 197, 94, 0.3)" : "rgba(239, 68, 68, 0.3)",
         }))
       );
+
+      // Add ZigZag lines
+      const zigzag = calculateZigZag(data, 0.5);
+      if (zigzag.highs.length > 0) {
+        const zigzagHighSeries = chart.addLineSeries({
+          color: "#f59e0b",
+          lineWidth: 2,
+          lineStyle: 2, // dashed
+          priceLineVisible: false,
+          lastValueVisible: false,
+        });
+        const highData = zigzag.highs.map(h => ({ time: h.time as any, value: h.price }));
+        zigzagHighSeries.setData(highData);
+      }
+      
+      if (zigzag.lows.length > 0) {
+        const zigzagLowSeries = chart.addLineSeries({
+          color: "#8b5cf6",
+          lineWidth: 2,
+          lineStyle: 2, // dashed
+          priceLineVisible: false,
+          lastValueVisible: false,
+        });
+        const lowData = zigzag.lows.map(l => ({ time: l.time as any, value: l.price }));
+        zigzagLowSeries.setData(lowData);
+      }
+
+      // Add Support/Resistance lines
+      const srLevels = calculateSupportResistance(data, 0.5);
+      srLevels.forEach(level => {
+        if (level.type === 'resistance') {
+          const series = chart.addLineSeries({
+            color: "#ef4444",
+            lineWidth: 1,
+            lineStyle: 0, // solid
+            priceLineVisible: true,
+            priceLineColor: "#ef4444",
+          });
+          series.setData([
+            { time: data[0].time as any, value: level.price },
+            { time: data[data.length - 1].time as any, value: level.price }
+          ]);
+        } else {
+          const series = chart.addLineSeries({
+            color: "#22c55e",
+            lineWidth: 1,
+            lineStyle: 0, // solid
+            priceLineVisible: true,
+            priceLineColor: "#22c55e",
+          });
+          series.setData([
+            { time: data[0].time as any, value: level.price },
+            { time: data[data.length - 1].time as any, value: level.price }
+          ]);
+        }
+      });
+
+      // Add Order Block zones
+      const orderBlocks = detectOrderBlocks(data, 10);
+      orderBlocks.forEach(block => {
+        const series = chart.addAreaSeries({
+          topColor: block.type === 'bullish' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+          bottomColor: block.type === 'bullish' ? 'rgba(34, 197, 94, 0.02)' : 'rgba(239, 68, 68, 0.02)',
+          lineColor: block.type === 'bullish' ? '#22c55e' : '#ef4444',
+          lineWidth: 1,
+        });
+        // Find start and end times for the zone
+        const startIdx = data.findIndex(d => d.time === block.time);
+        if (startIdx >= 0) {
+          const endTime = data[data.length - 1].time;
+          series.setData([
+            { time: block.time as any, value: block.top },
+            { time: endTime as any, value: block.top },
+            { time: endTime as any, value: block.bottom },
+            { time: block.time as any, value: block.bottom },
+          ]);
+        }
+      });
 
       chart.timeScale().fitContent();
 
